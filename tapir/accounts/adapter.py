@@ -15,8 +15,12 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
             return
 
         if tapir_user.keycloak_id is None:
-            keycloak_client = KeycloakUserManager.get_keycloak_client()
-            keycloak_id = keycloak_client.get_user_id(tapir_user.email)
+            keycloak_client = KeycloakUserManager.get_keycloak_client(cache={})
+            # Look up by email: imported Keycloak users may have a username
+            # (e.g. customernumber) that differs from their email.
+            keycloak_id = KeycloakUserManager.get_keycloak_id_by_email(
+                keycloak_client, tapir_user.email
+            )
             tapir_user.keycloak_id = keycloak_id
             tapir_user.save()
 
