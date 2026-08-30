@@ -73,8 +73,8 @@ class PersonalDataValidator:
                 "Diese E-Mail-Adresse ist schon einem anderen Mitglied zugewiesen."
             )
 
-        kc = KeycloakUserManager.get_keycloak_client()
-        keycloak_id = kc.get_user_id(email)
+        kc = KeycloakUserManager.get_keycloak_client(cache=cache)
+        keycloak_id = KeycloakUserManager.get_keycloak_id_by_email(kc, email)
         if keycloak_id is not None:
             raise ValidationError(
                 "Diese E-Mail-Adresse ist schon einem anderen Benutzer zugewiesen."
