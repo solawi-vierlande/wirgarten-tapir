@@ -241,8 +241,6 @@ class TestMemberEmailApiView(TapirIntegrationTest):
     ):
         mock_is_user_email_verified.return_value = False
         mock_send_verification_email.side_effect = KeycloakPutError()
-        self.mock_keycloak_client.get_user_id.return_value = None
-
         user_before_changes = MemberFactory.create(email="old_address@example.com")
         self.client.force_login(user_before_changes)
 
@@ -260,8 +258,8 @@ class TestMemberEmailApiView(TapirIntegrationTest):
         user_after_changes = Member.objects.get(id=user_before_changes.id)
         self.assertEqual("old_address@example.com", user_after_changes.email)
 
-        self.mock_keycloak_client.get_user_id.assert_called_once_with(
-            "new_address@example.com"
+        self.mock_keycloak_client.get_users.assert_any_call(
+            {"email": "new_address@example.com", "exact": True}
         )
 
         mock_send_verification_email.assert_called_once_with(
