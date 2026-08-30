@@ -6,12 +6,30 @@ from typing import TYPE_CHECKING
 from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from keycloak import KeycloakOpenIDConnection, KeycloakAdmin
+from keycloak.exceptions import KeycloakPostError
 
 if TYPE_CHECKING:
     from tapir.accounts.models import KeycloakUser
 
 
 class KeycloakUserManager:
+    @classmethod
+    def get_keycloak_id_by_email(
+        cls, keycloak_client: KeycloakAdmin, email: str
+    ) -> str | None:
+        """Look up a Keycloak user by email address.
+
+        Returns the Keycloak user ID (UUID), or None if no user has that email.
+        Note: Keycloak users may have a `username` that differs from `email`
+        (e.g. imported users with `username = customernumber`). Always look up
+        by email, never by `keycloak_client.get_user_id(email)` which queries
+        by `username`.
+        """
+        users = keycloak_client.get_users({"email": email, "exact": True})
+        if not users:
+            return None
+        return users[0]["id"]
+
     @classmethod
     def create_keycloak_user_if_necessary(
         cls,
@@ -29,6 +47,20 @@ class KeycloakUserManager:
             "enabled": True,
         }
 
+        keycloak_client = cls.get_keycloak_client()
+
+        # Look up by email (not username) because imported KC users may have a
+        # different username (e.g. customernumber).
+        keycloak_id = cls.get_keycloak_id_by_email(keycloak_client, user.email)
+        if keycloak_id is not None:
+            user.keycloak_id = keycloak_id
+            keycloak_client.update_user(user_id=user.keycloak_id, payload=data)
+            SocialAccount.objects.create(
+                user=user, provider="keycloak", uid=user.keycloak_id
+            )
+            user.save()
+            return
+
         if initial_password:
             data["credentials"] = [{"value": initial_password, "type": "password"}]
             data["emailVerified"] = True
@@ -40,8 +72,22 @@ class KeycloakUserManager:
         else:
             data["groups"] = []
 
-        keycloak_client = KeycloakUserManager.get_keycloak_client()
-        user.keycloak_id = keycloak_client.create_user(data)
+        try:
+            user.keycloak_id = keycloak_client.create_user(data)
+        except KeycloakPostError as e:
+            # Race / duplicate: another process created a user with the same
+            # email between our lookup and create. Re-fetch by email and reuse.
+            if e.response_code == 409:
+                keycloak_id = cls.get_keycloak_id_by_email(keycloak_client, user.email)
+                if keycloak_id is not None:
+                    user.keycloak_id = keycloak_id
+                    keycloak_client.update_user(user_id=user.keycloak_id, payload=data)
+                    SocialAccount.objects.create(
+                        user=user, provider="keycloak", uid=user.keycloak_id
+                    )
+                    user.save()
+                    return
+            raise
 
         SocialAccount.objects.create(
             user=user, provider="keycloak", uid=user.keycloak_id

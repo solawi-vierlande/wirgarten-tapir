@@ -141,6 +141,12 @@ def mock_keycloak(test: TapirIntegrationTest):
         email, None
     )
 
+    test.mock_keycloak_client.get_users.side_effect = lambda query: (
+        [{"id": keycloak_ids[query["email"]]}]
+        if query.get("email") in keycloak_ids
+        else []
+    )
+
     test.mock_keycloak_client.create_user.side_effect = (
         lambda data: mock_set_and_return_new_keycloak_id(
             email=data["email"], keycloak_ids=keycloak_ids

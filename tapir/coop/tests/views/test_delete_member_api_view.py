@@ -34,7 +34,7 @@ class TestDeleteMemberApiView(TapirIntegrationTest):
         self.client.force_login(user)
 
         kc = KeycloakUserManager.get_keycloak_client()
-        keycloak_id = kc.get_user_id(to_delete.email)
+        keycloak_id = KeycloakUserManager.get_keycloak_id_by_email(kc, to_delete.email)
         self.assertIsNotNone(keycloak_id)
 
         url = reverse("coop:delete_member")
@@ -44,5 +44,5 @@ class TestDeleteMemberApiView(TapirIntegrationTest):
         self.assertStatusCode(response, status.HTTP_200_OK)
         self.assertFalse(Member.objects.filter(id=to_delete.id).exists())
 
-        keycloak_id = kc.get_user_id(to_delete.email)
+        keycloak_id = KeycloakUserManager.get_keycloak_id_by_email(kc, to_delete.email)
         self.assertIsNone(keycloak_id)
