@@ -17,6 +17,9 @@ apis/TapirmailApi.ts
 apis/WaitingListApi.ts
 apis/index.ts
 index.ts
+models/AdminImportMemberPersonalDataRequest.ts
+models/AdminImportMemberRequestRequest.ts
+models/AdminImportMemberResponse.ts
 models/AdminSetAssociationMembershipRequestRequest.ts
 models/AdminSizeChangeRequest.ts
 models/AdminStartDateOption.ts
