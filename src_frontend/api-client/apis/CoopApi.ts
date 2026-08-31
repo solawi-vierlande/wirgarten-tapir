@@ -13,6 +13,8 @@
  */
 
 import type {
+  AdminImportMemberRequestRequest,
+  AdminImportMemberResponse,
   ExistingMemberPurchasesSharesRequestRequest,
   GetCoopShareTransactionsResponse,
   Member,
@@ -26,6 +28,8 @@ import type {
   PatchedUpdateMemberBankDataRequestRequest,
 } from "../models/index";
 import {
+  AdminImportMemberRequestRequestToJSON,
+  AdminImportMemberResponseFromJSON,
   ExistingMemberPurchasesSharesRequestRequestToJSON,
   GetCoopShareTransactionsResponseFromJSON,
   MemberBankDataResponseFromJSON,
@@ -39,6 +43,10 @@ import {
   PatchedUpdateMemberBankDataRequestRequestToJSON,
 } from "../models/index";
 import * as runtime from "../runtime";
+
+export interface CoopAdminImportMemberCreateRequest {
+  adminImportMemberRequestRequest: AdminImportMemberRequestRequest;
+}
 
 export interface CoopApiDeleteMemberDestroyRequest {
   memberId?: string;
@@ -89,6 +97,72 @@ export interface CoopMembersRetrieveRequest {
  *
  */
 export class CoopApi extends runtime.BaseAPI {
+  /**
+   * Admin-only direct DB import endpoint.  Bypasses the BestellWizard validator pipeline (``validate_phone_number_is_valid`` / ``validate_email_address_not_in_use``) and Keycloak sync, so admins can import legacy data that would otherwise be rejected. No welcome / SEPA / onboarding emails are sent — those have to be triggered out-of-band.
+   */
+  async coopAdminImportMemberCreateRaw(
+    requestParameters: CoopAdminImportMemberCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<AdminImportMemberResponse>> {
+    if (requestParameters["adminImportMemberRequestRequest"] == null) {
+      throw new runtime.RequiredError(
+        "adminImportMemberRequestRequest",
+        'Required parameter "adminImportMemberRequestRequest" was null or undefined when calling coopAdminImportMemberCreate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.apiKey) {
+      headerParameters["Authorization"] =
+        await this.configuration.apiKey("Authorization"); // tokenAuth authentication
+    }
+
+    if (
+      this.configuration &&
+      (this.configuration.username !== undefined ||
+        this.configuration.password !== undefined)
+    ) {
+      headerParameters["Authorization"] =
+        "Basic " +
+        btoa(this.configuration.username + ":" + this.configuration.password);
+    }
+    const response = await this.request(
+      {
+        path: `/coop/admin/import_member/`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: AdminImportMemberRequestRequestToJSON(
+          requestParameters["adminImportMemberRequestRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      AdminImportMemberResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Admin-only direct DB import endpoint.  Bypasses the BestellWizard validator pipeline (``validate_phone_number_is_valid`` / ``validate_email_address_not_in_use``) and Keycloak sync, so admins can import legacy data that would otherwise be rejected. No welcome / SEPA / onboarding emails are sent — those have to be triggered out-of-band.
+   */
+  async coopAdminImportMemberCreate(
+    requestParameters: CoopAdminImportMemberCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<AdminImportMemberResponse> {
+    const response = await this.coopAdminImportMemberCreateRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    */
   async coopApiDeleteMemberDestroyRaw(

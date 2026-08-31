@@ -2627,6 +2627,41 @@ paths:
                   items:
                     type: string
           description: ''
+  /coop/admin/import_member/:
+    post:
+      operationId: coop_admin_import_member_create
+      description: |-
+        Admin-only direct DB import endpoint.
+
+        Bypasses the BestellWizard validator pipeline (``validate_phone_number_is_valid``
+        / ``validate_email_address_not_in_use``) and Keycloak sync, so admins can
+        import legacy data that would otherwise be rejected. No welcome / SEPA /
+        onboarding emails are sent — those have to be triggered out-of-band.
+      tags:
+      - coop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminImportMemberRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminImportMemberRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminImportMemberRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - cookieAuth: []
+      - DrfForwardAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminImportMemberResponse'
+          description: ''
   /coop/api/delete_member:
     delete:
       operationId: coop_api_delete_member_destroy
@@ -8687,6 +8722,156 @@ paths:
           description: No response body
 components:
   schemas:
+    AdminImportMemberPersonalDataRequest:
+      type: object
+      description: |-
+        Mirrors BestellWizardConfirmOrderRequestSerializer.PersonalDataSerializer
+        but skips the phone/email validators that block imports for legacy data.
+
+        email and phone_number are intentionally plain CharField (no EmailField,
+        no phonenumbers check) so admins can fix bad data via Django admin later.
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+        last_name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          minLength: 1
+        phone_number:
+          type: string
+          minLength: 1
+        street:
+          type: string
+          minLength: 1
+        street_2:
+          type: string
+        postcode:
+          type: string
+          minLength: 1
+        city:
+          type: string
+          minLength: 1
+        country:
+          type: string
+          minLength: 1
+        account_owner:
+          type: string
+        iban:
+          type: string
+      required:
+      - account_owner
+      - city
+      - country
+      - email
+      - first_name
+      - iban
+      - last_name
+      - phone_number
+      - postcode
+      - street
+      - street_2
+    AdminImportMemberRequestRequest:
+      type: object
+      description: |-
+        Admin-only DB import of a single Member with subscriptions and pickup
+        location. Mirrors BestellWizardConfirmOrderRequestSerializer but with the
+        PersonalData email/phone validators disabled and all coop (Genossenschaft)
+        logic stripped — this Tapir instance runs as a Verein (LEGAL_STATUS_ASSOCIATION).
+      properties:
+        shopping_cart_order:
+          type: object
+          additionalProperties:
+            type: integer
+        shopping_cart_waiting_list:
+          type: object
+          additionalProperties:
+            type: integer
+        personal_data:
+          $ref: '#/components/schemas/AdminImportMemberPersonalDataRequest'
+        sepa_allowed:
+          type: boolean
+        contract_accepted:
+          type: boolean
+        statute_accepted:
+          type: boolean
+        pickup_location_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        student_status_enabled:
+          type: boolean
+        payment_rhythm:
+          type: string
+          minLength: 1
+        become_member_now:
+          type: boolean
+          nullable: true
+        privacy_policy_read:
+          type: boolean
+        cancellation_policy_read:
+          type: boolean
+        growing_period_id:
+          type: string
+          minLength: 1
+        solidarity_contribution:
+          type: number
+          format: double
+        distribution_channels:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        feedback:
+          type: string
+        association_membership_type_id:
+          type: string
+        keycloak_lookup:
+          type: boolean
+          default: true
+        date_joined:
+          type: string
+          format: date-time
+          nullable: true
+        privacy_consent:
+          type: string
+          format: date-time
+          nullable: true
+        member_no:
+          type: integer
+          nullable: true
+      required:
+      - become_member_now
+      - cancellation_policy_read
+      - contract_accepted
+      - distribution_channels
+      - growing_period_id
+      - payment_rhythm
+      - personal_data
+      - pickup_location_ids
+      - privacy_policy_read
+      - sepa_allowed
+      - shopping_cart_order
+      - shopping_cart_waiting_list
+      - solidarity_contribution
+      - statute_accepted
+      - student_status_enabled
+    AdminImportMemberResponse:
+      type: object
+      properties:
+        member_id:
+          type: string
+        was_existing:
+          type: boolean
+        order_imported:
+          type: boolean
+      required:
+      - member_id
+      - order_imported
+      - was_existing
     AdminSetAssociationMembershipRequestRequest:
       type: object
       properties:
