@@ -86,3 +86,70 @@ class MemberEmailResponseSerializer(serializers.Serializer):
 class MemberEmailRequestSerializer(serializers.Serializer):
     member_id = serializers.CharField()
     email = serializers.EmailField()
+
+
+class AdminImportMemberPersonalDataSerializer(serializers.Serializer):
+    """Mirrors BestellWizardConfirmOrderRequestSerializer.PersonalDataSerializer
+    but skips the phone/email validators that block imports for legacy data.
+
+    email and phone_number are intentionally plain CharField (no EmailField,
+    no phonenumbers check) so admins can fix bad data via Django admin later.
+    """
+
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    email = serializers.CharField()
+    phone_number = serializers.CharField()
+    street = serializers.CharField()
+    street_2 = serializers.CharField(allow_blank=True)
+    postcode = serializers.CharField()
+    city = serializers.CharField()
+    country = serializers.CharField()
+    account_owner = serializers.CharField(allow_blank=True)
+    iban = serializers.CharField(allow_blank=True)
+
+
+class AdminImportMemberRequestSerializer(serializers.Serializer):
+    """Admin-only DB import of a single Member with subscriptions and pickup
+    location. Mirrors BestellWizardConfirmOrderRequestSerializer but with the
+    PersonalData email/phone validators disabled and all coop (Genossenschaft)
+    logic stripped — this Tapir instance runs as a Verein (LEGAL_STATUS_ASSOCIATION).
+    """
+
+    shopping_cart_order = serializers.DictField(child=serializers.IntegerField())
+    shopping_cart_waiting_list = serializers.DictField(child=serializers.IntegerField())
+    personal_data = AdminImportMemberPersonalDataSerializer()
+    sepa_allowed = serializers.BooleanField()
+    contract_accepted = serializers.BooleanField()
+    statute_accepted = serializers.BooleanField()
+    pickup_location_ids = serializers.ListField(child=serializers.CharField())
+    student_status_enabled = serializers.BooleanField()
+    payment_rhythm = serializers.CharField()
+    become_member_now = serializers.BooleanField(allow_null=True)
+    privacy_policy_read = serializers.BooleanField()
+    cancellation_policy_read = serializers.BooleanField()
+    growing_period_id = serializers.CharField()
+    solidarity_contribution = serializers.FloatField()
+    distribution_channels = serializers.ListField(child=serializers.CharField())
+    feedback = serializers.CharField(allow_blank=True, required=False)
+    association_membership_type_id = serializers.CharField(
+        required=False, allow_blank=True
+    )
+    keycloak_lookup = serializers.BooleanField(required=False, default=True)
+    date_joined = serializers.DateTimeField(required=False, allow_null=True)
+    privacy_consent = serializers.DateTimeField(required=False, allow_null=True)
+    # Optional: assign a specific `Member.member_no` (Vereinsnummer) on
+    # import. If unset, the member is created without one and
+    # `MemberNumberService` (or `backfill_member_numbers`) assigns one
+    # later. Accepted at three payload locations for back-compat with
+    # the legacy sync script: top-level `member_no`,
+    # `personal_data.member_no`, `personal_data.number` (string coerced
+    # to int). The first one that resolves wins (top-level > personal_data
+    # > nested).
+    member_no = serializers.IntegerField(required=False, allow_null=True)
+
+
+class AdminImportMemberResponseSerializer(serializers.Serializer):
+    member_id = serializers.CharField()
+    was_existing = serializers.BooleanField()
+    order_imported = serializers.BooleanField()
