@@ -1,5 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from "./AdminImportMemberPersonalDataRequest";
+export * from "./AdminImportMemberRequestRequest";
+export * from "./AdminImportMemberResponse";
 export * from "./AdminSetAssociationMembershipRequestRequest";
 export * from "./AssignmentLogEntry";
 export * from "./AssignmentLogEntryStatusEnum";
