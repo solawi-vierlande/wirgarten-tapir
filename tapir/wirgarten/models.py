@@ -5,7 +5,7 @@ from functools import partial
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models, transaction
+from django.db import models
 from django.db.models import (
     F,
     Index,
@@ -20,7 +20,8 @@ from django.utils.translation import gettext_lazy as _
 from localflavor.generic.models import IBANField
 from phonenumber_field.modelfields import PhoneNumberField
 
-from tapir.accounts.models import TapirUser, KeycloakUserQuerySetManager
+from tapir.accounts.models import TapirUser
+from tapir.accounts.services.email_normaliser import EmailNormaliser
 from tapir.configuration.parameter import get_parameter_value
 from tapir.core.models import TapirModel
 from tapir.log.models import LogEntry, UpdateModelLogEntry
@@ -29,6 +30,13 @@ from tapir.utils.models import CountryField
 from tapir.wirgarten.constants import NO_DELIVERY, DeliveryCycle, OPTIONS_WEEKDAYS
 from tapir.wirgarten.parameter_keys import ParameterKeys
 from tapir.wirgarten.utils import format_currency, format_date, get_today
+
+PICKUP_LOCATION_START_DATE_HELP_TEXT = (
+    "Leer = ab sofort verfügbar. Neuanlagen nur an einem Montag möglich."
+)
+PICKUP_LOCATION_END_DATE_HELP_TEXT = (
+    "Leer = dauerhaft verfügbar. Schließen nur an einem Sonntag möglich."
+)
 
 
 class LocationRoute(TapirModel):
@@ -58,7 +66,7 @@ class PickupLocation(TapirModel):
     street_2 = models.CharField(_("Extra address line"), max_length=150, blank=True)
     postcode = models.CharField(_("Postcode"), max_length=32)
     city = models.CharField(_("City"), max_length=50)
-    info = models.CharField(_("Additional info"), max_length=1024, blank=True)
+    info = models.CharField(_("Additional info"), max_length=3000, blank=True)
     access_code = models.CharField(_("Access Code"), max_length=20, blank=True)
     messenger_group_link = models.CharField(
         _("Messenger Group Link"), max_length=150, blank=True
@@ -70,7 +78,23 @@ class PickupLocation(TapirModel):
     location_route = models.ForeignKey(
         LocationRoute, blank=True, null=True, on_delete=models.SET_NULL
     )
-    route_info = models.CharField(_("Driver/Route info"), max_length=1024, blank=True)
+    route_info = models.CharField(_("Driver/Route info"), max_length=3000, blank=True)
+    start_date = models.DateField(
+        _("Available from"),
+        null=True,
+        blank=True,
+        help_text=_(PICKUP_LOCATION_START_DATE_HELP_TEXT),
+    )  # null = active from the beginning
+    end_date = models.DateField(
+        _("Available until"),
+        null=True,
+        blank=True,
+        help_text=_(PICKUP_LOCATION_END_DATE_HELP_TEXT),
+    )  # null = active forever
+    show_details_in_basket_totals_export = models.BooleanField(
+        _("Im Gesamtkistenanzahls-Zettel Details anzeigen"),
+        default=False,
+    )
 
     class Meta:
         constraints = [
@@ -322,11 +346,20 @@ class MemberQuerySet(models.QuerySet):
             id__in=Member.objects.with_shares(reference_date)
         ).distinct()
 
+    def needing_banking_data(self):
+        return self.filter(
+            models.Q(iban__isnull=True)
+            | models.Q(iban="")
+            | models.Q(account_owner__isnull=True)
+            | models.Q(account_owner="")
+            | models.Q(sepa_consent__isnull=True)
+        )
 
-class TapirUserManager(models.Manager.from_queryset(MemberQuerySet)):
+
+class MemberManager(models.Manager.from_queryset(MemberQuerySet)):
     @staticmethod
-    def normalize_email(email: str) -> str:
-        return KeycloakUserQuerySetManager.normalize_email(email)
+    def normalize_email(email: str):
+        return EmailNormaliser.normalise(email)
 
 
 class Member(TapirUser):
@@ -334,7 +367,7 @@ class Member(TapirUser):
     A member of WirGarten. Usually a member has coop shares and optionally other subscriptions.
     """
 
-    objects = TapirUserManager()
+    objects = MemberManager()
 
     account_owner = models.CharField(_("Account owner"), max_length=150, null=True)
     iban = IBANField(_("IBAN"), null=True)
@@ -346,6 +379,7 @@ class Member(TapirUser):
     created_at = models.DateTimeField(auto_now_add=True, null=False)
     member_no = models.IntegerField(_("Mitgliedsnummer"), unique=True, null=True)
     is_student = models.BooleanField(_("Student*in"), default=False)
+    pseudonym = models.CharField(_("Pseudonym"), max_length=150, blank=True)
     has_received_membership_started_mail = models.BooleanField(default=False)
 
     @property
@@ -372,16 +406,6 @@ class Member(TapirUser):
                 return None
 
             return member_pickup_location_object.pickup_location
-
-    @transaction.atomic
-    def save(self, *args, **kwargs):
-        if "bypass_keycloak" not in kwargs:
-            kwargs["bypass_keycloak"] = get_parameter_value(
-                ParameterKeys.MEMBER_BYPASS_KEYCLOAK,
-                cache=kwargs.get("cache", {}),
-            )
-
-        super().save(*args, **kwargs)
 
     def coop_shares_total_value(self):
         today = get_today()
@@ -545,12 +569,6 @@ class Product(TapirModel):
                 raise ValidationError(
                     "There must be exactly one base product per ProductType."
                 )
-
-    def save(self, *args, **kwargs):
-        self.clean()
-
-        with transaction.atomic():
-            super().save(*args, **kwargs)
 
     class Meta:
         indexes = [Index(fields=["type"], name="idx_product_type")]
@@ -875,11 +893,6 @@ class CoopShareTransaction(TapirModel, Payable, AdminConfirmableMixin):
                     )
                 }
             )
-
-    def save(self, *args, **kwargs):
-        # Call the clean method to validate the model instance before saving.
-        self.clean()
-        super().save(*args, **kwargs)
 
     def __str__(self):
         prefix = f"[{format_date(self.timestamp)}] {abs(self.quantity)} Genossenschaftsanteile"

@@ -12,6 +12,7 @@ from django_filters import BooleanFilter, FilterSet, ModelChoiceFilter, ChoiceFi
 from django_filters.views import FilterView
 
 from tapir.configuration.parameter import get_parameter_value
+from tapir.coop.services.german_name_sort_service import GermanNameSortService
 from tapir.coop.services.member_number_service import MemberNumberService
 from tapir.subscriptions.services.subscription_price_calculator import (
     SubscriptionPriceCalculator,
@@ -31,7 +32,6 @@ from tapir.wirgarten.parameter_keys import ParameterKeys
 from tapir.wirgarten.service.member import (
     annotate_member_queryset_with_coop_shares_total_value,
 )
-from tapir.wirgarten.service.product_standard_order import product_type_order_by
 from tapir.wirgarten.utils import format_date, get_now, get_today
 from tapir.wirgarten.views.filters import SecondaryOrderingFilter
 
@@ -53,10 +53,9 @@ class SubscriptionListFilter(FilterSet):
     )
     member = ModelChoiceFilter(
         label=_("Mitglied"),
-        queryset=Member.objects.all()
-        .order_by("first_name")
-        .order_by("last_name")
-        .order_by("-created_at"),
+        queryset=GermanNameSortService.annotate_queryset_with_sort_keys(
+            Member.objects.all(), ["last_name", "first_name"], cache={}
+        ).order_by("last_name_sort_key", "first_name_sort_key", "member_no"),
     )
     pickup_location = ModelChoiceFilter(
         label=_("Abholort"),
@@ -65,7 +64,7 @@ class SubscriptionListFilter(FilterSet):
     )
     product__type = ModelChoiceFilter(
         label=_("Vertragsart"),
-        queryset=ProductType.objects.all().order_by(*product_type_order_by()),
+        queryset=ProductType.objects.all().order_by("order_in_bestellwizard"),
     )
     product = ModelChoiceFilter(label=_("Variante"), queryset=Product.objects.all())
     o = SecondaryOrderingFilter(
@@ -105,7 +104,7 @@ class SubscriptionListFilter(FilterSet):
         widget=CheckboxInput,
     )
     show_only_ended_contracts = BooleanFilter(
-        label=_("Nur ausgelaufene Verträge anzeigen"),
+        label=_("Innerhalb der Vertragsperiode beendete Verträge anzeigen"),
         field_name="show_only_ended_contracts",
         method="filter_show_only_ended_contracts",
         widget=CheckboxInput,
@@ -302,6 +301,7 @@ class ExportSubscriptionList(View):
                 "Vorname",
                 "Nachname",
                 "Email",
+                "Telefon",
                 "Abgeschlossen am",
                 "Gekündigt am",
                 "Vertragsbeginn",
@@ -323,6 +323,7 @@ class ExportSubscriptionList(View):
                         sub.member.first_name,
                         sub.member.last_name,
                         sub.member.email,
+                        sub.member.phone_number,
                         format_date(sub.created_at),
                         format_date(sub.cancellation_ts),
                         format_date(sub.start_date),
@@ -340,7 +341,9 @@ class ExportSubscriptionList(View):
         return response
 
     def get_queryset(self):
-        return SubscriptionListView.get_queryset_external(cache=self.cache)
+        return SubscriptionListView.get_queryset_external(
+            cache=self.cache
+        ).select_related("member")
 
     def get_filterset_class(self):
         return SubscriptionListFilter

@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from tapir_mail.triggers.transactional_trigger import TransactionalTriggerData
 
+from tapir.accounts.services.email_normaliser import EmailNormaliser
 from tapir.associations.models import AssociationMembershipType
 from tapir.bestell_wizard.serializers import (
     BestellWizardConfirmOrderRequestSerializer,
@@ -39,6 +40,9 @@ from tapir.coop.services.personal_data_validator import PersonalDataValidator
 from tapir.deliveries.services.delivery_date_calculator import DeliveryDateCalculator
 from tapir.payments.services.member_payment_rhythm_service import (
     MemberPaymentRhythmService,
+)
+from tapir.pickup_locations.services.pickup_location_active_filter import (
+    PickupLocationActiveFilter,
 )
 from tapir.pickup_locations.services.public_pickup_locations_provider import (
     PublicPickupLocationProvider,
@@ -215,7 +219,6 @@ class BestellWizardConfirmOrderApiView(APIView):
             "error": None,
         }
         try:
-            member = None
             with transaction.atomic():
                 member, waiting_list_entry = (
                     self.validate_everything_and_apply_all_changes(
@@ -231,10 +234,6 @@ class BestellWizardConfirmOrderApiView(APIView):
                         waiting_list_entry=waiting_list_entry,
                         feedback_text=feedback,
                     )
-            if member is not None:
-                # The member creation does calls to KeycloakUserManager that are only applied after the transaction ends.
-                # In order to persist the changes that the KeycloakUserManager applies, we need to save manually one more time.
-                member.save()
         except ValidationError as error:
             data = {
                 "order_confirmed": False,
@@ -329,10 +328,17 @@ class BestellWizardConfirmOrderApiView(APIView):
                 cache=cache,
             )
         )
+        validated_serializer_data["personal_data"]["email"] = EmailNormaliser.normalise(
+            validated_serializer_data["personal_data"]["email"]
+        )
         WaitingListEntryValidator.validate_creation_of_waiting_list_entry_for_a_potential_member(
             order=waiting_list_order,
             email=validated_serializer_data["personal_data"]["email"],
             number_of_coop_shares=validated_serializer_data["number_of_coop_shares"],
+            cache=cache,
+        )
+        PersonalDataValidator.validate_phone_number_is_valid(
+            phone_number=validated_serializer_data["personal_data"]["phone_number"],
             cache=cache,
         )
         entry = WaitingListEntryCreator.create_entry_potential_member(
@@ -492,7 +498,8 @@ class BestellWizardBaseDataApiView(APIView):
                     deleted=False, hidden_in_bestell_wizard=False
                 ),
                 "pickup_locations": PublicPickupLocationProvider.get_pickup_locations_available_for_members(
-                    cache=self.cache
+                    cache=self.cache,
+                    reference_date=earliest_contract_start_date,
                 ),
                 "show_coop_content": legal_status_is_cooperative(cache=self.cache),
                 "trial_period_length_in_weeks": trial_period_length_in_weeks,
@@ -552,6 +559,7 @@ class BestellWizardBaseDataApiView(APIView):
             "force_waiting_list": ParameterKeys.BESTELLWIZARD_FORCE_WAITING_LIST,
             "intro_enabled": ParameterKeys.BESTELLWIZARD_SHOW_INTRO,
             "student_status_allowed": ParameterKeys.ALLOW_STUDENT_TO_ORDER_WITHOUT_COOP_SHARES,
+            "phone_number_required": ParameterKeys.MEMBER_PHONE_NUMBER_REQUIRED,
             "intro_step_text": ParameterKeys.BESTELLWIZARD_INTRO_TEXT,
             "label_checkbox_sepa_mandat": ParameterKeys.BESTELLWIZARD_SEPA_MANDAT_CHECKBOX_TEXT,
             "label_checkbox_contract_policy": ParameterKeys.BESTELLWIZARD_CONTRACT_POLICY_CHECKBOX_TEXT,
@@ -767,8 +775,12 @@ class BestellWizardDeliveryDatesForOrderApiView(APIView):
             cache=self.cache,
         )
 
+        pickup_location_ids = PickupLocationActiveFilter.get_active_at_date(
+            PickupLocation.objects.all(), reference_date
+        ).values_list("id", flat=True)
+
         response_data = {}
-        for pickup_location_id in PickupLocation.objects.values_list("id", flat=True):
+        for pickup_location_id in pickup_location_ids:
             response_data[pickup_location_id] = {
                 product_type_id: DeliveryDateCalculator.get_next_delivery_date_for_product_type(
                     reference_date=reference_date,

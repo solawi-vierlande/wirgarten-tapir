@@ -2,6 +2,10 @@ import React, { useEffect, useState } from "react";
 import { BestellWizardApi } from "../../api-client";
 import { BestellWizardSettings } from "../../bestell_wizard/types/BestellWizardSettings.ts";
 import { PersonalData } from "../../bestell_wizard/types/PersonalData.ts";
+import {
+  emailsMatch,
+  shouldShowEmailMismatchWarning,
+} from "../../bestell_wizard/utils/emailsMatch.ts";
 import { isEmailValid } from "../../bestell_wizard/utils/isEmailValid.ts";
 import { isPhoneNumberValid } from "../../bestell_wizard/utils/isPhoneNumberValid.ts";
 import { useApi } from "../../hooks/useApi.ts";
@@ -34,6 +38,7 @@ const FIELDS: (keyof PersonalData)[] = [
   "firstName",
   "lastName",
   "email",
+  "emailConfirm",
   "street",
   "street2",
   "postcode",
@@ -46,6 +51,7 @@ function getType(key: keyof PersonalData) {
     case "phoneNumber":
       return "tel";
     case "email":
+    case "emailConfirm":
       return "email";
     default:
       return "text";
@@ -117,7 +123,11 @@ const Step8PersonalData: React.FC<Step8PersonalDataProps> = ({
     setShowValidation(true);
 
     if (
-      isPersonalDataValidShort(personalData, emailAddressAlreadyInUse) &&
+      isPersonalDataValidShort(
+        personalData,
+        emailAddressAlreadyInUse,
+        settings.phoneNumberRequired,
+      ) &&
       isOver18
     ) {
       goToNextStep();
@@ -142,8 +152,12 @@ const Step8PersonalData: React.FC<Step8PersonalDataProps> = ({
         return emailAddressAlreadyInUseLoading
           ? "Wird geprüft..."
           : "E-Mail-Adresse";
+      case "emailConfirm":
+        return "E-Mail-Adresse wiederholen";
       case "phoneNumber":
-        return "Telefon-Nr";
+        return settings.phoneNumberRequired
+          ? "Telefon-Nr"
+          : "Telefon-Nr (optional)";
       default:
         return key;
     }
@@ -152,6 +166,9 @@ const Step8PersonalData: React.FC<Step8PersonalDataProps> = ({
   function isValid(key: keyof PersonalData) {
     switch (key) {
       case "phoneNumber":
+        if (personalData.phoneNumber.length === 0) {
+          return !settings.phoneNumberRequired;
+        }
         return isPhoneNumberValid(personalData.phoneNumber);
       case "email":
         return (
@@ -159,10 +176,39 @@ const Step8PersonalData: React.FC<Step8PersonalDataProps> = ({
           !emailAddressAlreadyInUse &&
           !emailAddressAlreadyInUseLoading
         );
+      case "emailConfirm":
+        return (
+          personalData.emailConfirm.trim().length > 0 &&
+          emailsMatch(personalData.email, personalData.emailConfirm)
+        );
       case "street2":
         return true;
       default:
         return personalData[key].length > 0;
+    }
+  }
+
+  function getExtraText(key: keyof PersonalData) {
+    switch (key) {
+      case "email":
+        return emailAddressAlreadyInUse && !emailAddressAlreadyInUseLoading
+          ? "Diese Email-Adresse ist schon vergeben"
+          : "";
+      case "emailConfirm":
+        return shouldShowEmailMismatchWarning(
+          personalData.email,
+          personalData.emailConfirm,
+        )
+          ? "Die E-Mail-Adressen stimmen nicht überein"
+          : "";
+      case "phoneNumber":
+        return showValidation &&
+          settings.phoneNumberRequired &&
+          personalData.phoneNumber.length === 0
+          ? "Bitte gib eine Telefonnummer an."
+          : "";
+      default:
+        return "";
     }
   }
 
@@ -194,13 +240,7 @@ const Step8PersonalData: React.FC<Step8PersonalDataProps> = ({
             type={getType(field)}
             showValidation={showValidation}
             isValid={isValid(field)}
-            extraText={
-              field === "email" &&
-              emailAddressAlreadyInUse &&
-              !emailAddressAlreadyInUseLoading
-                ? "Diese Email-Adresse ist schon vergeben"
-                : ""
-            }
+            extraText={getExtraText(field)}
             style={{ width: "264px" }}
             disabled={changesDisabled}
           />

@@ -1,13 +1,15 @@
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, ANY
 
 from django.urls import reverse
 from rest_framework import status
+from tapir_mail.models import StaticSegment, StaticSegmentRecipient
 from tapir_mail.triggers.transactional_trigger import (
     TransactionalTrigger,
     TransactionalTriggerData,
 )
 
-from tapir.accounts.models import UpdateTapirUserLogEntry, KeycloakUser
+from tapir.accounts.models import UpdateTapirUserLogEntry
+from tapir.accounts.services.keycloak_user_manager import KeycloakUserManager
 from tapir.configuration.models import TapirParameter
 from tapir.core.config import LEGAL_STATUS_ASSOCIATION, LEGAL_STATUS_COOPERATIVE
 from tapir.wirgarten.mail_events import Events
@@ -18,10 +20,10 @@ from tapir.wirgarten.tests.factories import MemberFactory
 from tapir.wirgarten.tests.test_utils import TapirIntegrationTest
 
 
-class TestMemberBankDataApiView(TapirIntegrationTest):
+class TestMemberPersonalDataApiView(TapirIntegrationTest):
     SIMPLE_FIELDS = [
-        "email",
         "phone_number",
+        "phone_number_landline",
         "street",
         "street_2",
         "postcode",
@@ -46,7 +48,7 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         self.assertStatusCode(response, status.HTTP_403_FORBIDDEN)
 
     def test_get_memberTriesToGetOwnData_returnsCorrectData(self):
-        user = MemberFactory.create(is_superuser=False)
+        user = MemberFactory.create(is_superuser=False, phone_number="017726254738")
         self.client.force_login(user)
 
         url = reverse("coop:member_personal_data")
@@ -62,7 +64,7 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
 
     def test_get_adminTriesToGetDataFromAnotherMember_returnsCorrectData(self):
         user = MemberFactory.create(is_superuser=True)
-        target = MemberFactory.create()
+        target = MemberFactory.create(phone_number="017726254738")
         self.client.force_login(user)
 
         url = reverse("coop:member_personal_data")
@@ -115,7 +117,27 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         response_content = response.json()
         self.assertTrue(response_content["is_student"])
 
-    @patch.object(TransactionalTrigger, "fire_action")
+    def test_get_studentStatusDisabledAndLegalStatusIsCooperative_returnsNoneAsStudentStatus(
+        self,
+    ):
+        user = MemberFactory.create(is_student=True)
+        self.client.force_login(user)
+        self._set_parameter(
+            ParameterKeys.ALLOW_STUDENT_TO_ORDER_WITHOUT_COOP_SHARES, False
+        )
+        self._set_parameter(
+            ParameterKeys.ORGANISATION_LEGAL_STATUS, LEGAL_STATUS_COOPERATIVE
+        )
+
+        url = reverse("coop:member_personal_data")
+        url = f"{url}?member_id={user.id}"
+        response = self.client.get(url)
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertIsNone(response_content["is_student"])
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
     def test_patch_memberTriesToUpdateDataFromAnotherMember_returns403(
         self, mock_fire_action: Mock
     ):
@@ -148,7 +170,7 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         mock_fire_action.assert_not_called()
         self.assertFalse(UpdateTapirUserLogEntry.objects.exists())
 
-    @patch.object(TransactionalTrigger, "fire_action")
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
     def test_patch_memberTriesToUpdateOwnData_updatesDataAndCreateLogEntryAndSendMail(
         self, mock_fire_action: Mock
     ):
@@ -207,7 +229,7 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         self.assertIsNone(trigger_data.recipient_outside_of_base_queryset)
         self.assertEqual({}, trigger_data.token_data)
 
-    @patch.object(TransactionalTrigger, "fire_action")
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
     def test_patch_adminTriesToUpdateDataOfAnOtherMember_updatesDataAndCreateLogEntryAndSendMail(
         self, mock_fire_action: Mock
     ):
@@ -226,6 +248,7 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
             "phone_number": "+4917744563327",
             "postcode": "12345",
             "city": "test_city",
+            "country": "DE",
             "is_student": False,
         }
         response = self.client.patch(
@@ -259,49 +282,109 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         self.assertIsNone(trigger_data.recipient_outside_of_base_queryset)
         self.assertEqual({}, trigger_data.token_data)
 
-    @patch.object(TransactionalTrigger, "fire_action")
-    def test_patch_newEmailIsAlreadyInUse_dontApplyChangesAndReturnsError(
-        self, mock_fire_action: Mock
-    ):
-        user = MemberFactory.create(
-            is_superuser=False, email="email_before@example.com"
-        )
-        other_member = MemberFactory.create()
+    def test_get_memberGetsOwnData_returnsCountryButCannotEditIt(self):
+        user = MemberFactory.create(is_superuser=False, country="AT")
         self.client.force_login(user)
 
         url = reverse("coop:member_personal_data")
-        response = self.client.patch(
-            url,
-            data={
-                "member_id": user.id,
-                "first_name": "test_fn",
-                "last_name": "test_ln",
-                "street": "test_street",
-                "street_2": "test_street2",
-                "email": other_member.email,
-                "phone_number": "+4917744563327",
-                "postcode": 12345,
-                "city": "test_city",
-                "is_student": False,
-            },
+        response = self.client.get(f"{url}?member_id={user.id}")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertEqual("AT", response_content["country"])
+        self.assertFalse(response_content["can_edit_country"])
+
+    def test_get_adminGetsDataFromAnotherMember_returnsCountryAndCanEditCountry(self):
+        admin = MemberFactory.create(is_superuser=True)
+        target = MemberFactory.create(country="AT")
+        self.client.force_login(admin)
+
+        url = reverse("coop:member_personal_data")
+        response = self.client.get(f"{url}?member_id={target.id}")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertEqual("AT", response_content["country"])
+        self.assertTrue(response_content["can_edit_country"])
+
+    def _patch_country(self, actor, target, country):
+        self.client.force_login(actor)
+        data = {
+            "member_id": target.id,
+            "first_name": target.first_name,
+            "last_name": target.last_name,
+            "street": "test_street",
+            "street_2": "",
+            "email": target.email,
+            "phone_number": "+4917744563327",
+            "postcode": "12345",
+            "city": "test_city",
+            "country": country,
+            "is_student": False,
+        }
+        if country is None:
+            del data["country"]
+        return self.client.patch(
+            reverse("coop:member_personal_data"),
+            data=data,
             content_type="application/json",
         )
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_adminChangesCountry_countryIsSaved(self, _):
+        admin = MemberFactory.create(is_superuser=True)
+        target = MemberFactory.create(country="DE")
+
+        response = self._patch_country(admin, target, "AT")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        self.assertTrue(response.json()["order_confirmed"])
+        target.refresh_from_db()
+        self.assertEqual("AT", target.country)
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_memberTriesToChangeOwnCountry_countryIsNotChanged(self, _):
+        user = MemberFactory.create(is_superuser=False, country="DE")
+
+        response = self._patch_country(user, user, "AT")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual("DE", user.country)
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_adminSendsCountryOutsideOfDeAndAt_dontApplyChangesAndReturnsError(
+        self, mock_fire_action: Mock
+    ):
+        admin = MemberFactory.create(is_superuser=True)
+        target = MemberFactory.create(country="DE")
+
+        response = self._patch_country(admin, target, "FR")
 
         self.assertStatusCode(response, status.HTTP_200_OK)
         response_content = response.json()
         self.assertFalse(response_content["order_confirmed"])
-        self.assertEqual(
-            "Diese E-Mail-Adresse ist schon ein anderes Mitglied zugewiesen.",
-            response_content["error"],
-        )
-
-        user.refresh_from_db()
-        self.assertEqual("email_before@example.com", user.email)
-
+        self.assertIsNotNone(response_content["error"])
+        target.refresh_from_db()
+        self.assertEqual("DE", target.country)
         mock_fire_action.assert_not_called()
-        self.assertFalse(UpdateTapirUserLogEntry.objects.exists())
 
-    @patch.object(TransactionalTrigger, "fire_action")
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_adminSendsNoCountry_dontApplyChangesAndReturnsError(
+        self, mock_fire_action: Mock
+    ):
+        admin = MemberFactory.create(is_superuser=True)
+        target = MemberFactory.create(country="AT")
+
+        response = self._patch_country(admin, target, None)
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        self.assertFalse(response.json()["order_confirmed"])
+        target.refresh_from_db()
+        self.assertEqual("AT", target.country)
+        mock_fire_action.assert_not_called()
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
     def test_patch_phoneNumberIsInvalid_dontApplyChangesAndReturnsError(
         self, mock_fire_action: Mock
     ):
@@ -317,7 +400,6 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
                 "last_name": "test_ln",
                 "street": "test_street",
                 "street_2": "test_street2",
-                "email": user.email,
                 "phone_number": "123",
                 "postcode": "12345",
                 "city": "test_city",
@@ -340,7 +422,182 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         mock_fire_action.assert_not_called()
         self.assertFalse(UpdateTapirUserLogEntry.objects.exists())
 
-    @patch.object(TransactionalTrigger, "fire_action")
+    def test_get_memberHasNoPhoneNumber_returnsEmptyString(self):
+        user = MemberFactory.create(is_superuser=False, phone_number=None)
+        self.client.force_login(user)
+
+        url = reverse("coop:member_personal_data")
+        response = self.client.get(f"{url}?member_id={user.id}")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        self.assertEqual("", response.json()["phone_number"])
+
+    def test_get_default_returnsPhoneNumberRequiredParameter(self):
+        user = MemberFactory.create(is_superuser=False)
+        self.client.force_login(user)
+        url = reverse("coop:member_personal_data")
+
+        for value in [True, False]:
+            self._set_parameter(ParameterKeys.MEMBER_PHONE_NUMBER_REQUIRED, value)
+            response = self.client.get(f"{url}?member_id={user.id}")
+
+            self.assertStatusCode(response, status.HTTP_200_OK)
+            self.assertEqual(value, response.json()["phone_number_required"])
+
+    def _patch_phone_number(self, user, phone_number):
+        self.client.force_login(user)
+        return self.client.patch(
+            reverse("coop:member_personal_data"),
+            data={
+                "member_id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "street": "test_street",
+                "street_2": "",
+                "phone_number": phone_number,
+                "postcode": "12345",
+                "city": "test_city",
+                "is_student": False,
+            },
+            content_type="application/json",
+        )
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_phoneNumberEmptyAndRequired_dontApplyChangesAndReturnsError(
+        self, mock_fire_action: Mock
+    ):
+        self._set_parameter(ParameterKeys.MEMBER_PHONE_NUMBER_REQUIRED, True)
+        user = MemberFactory.create(is_superuser=False, phone_number="017726254738")
+
+        response = self._patch_phone_number(user, "")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertFalse(response_content["order_confirmed"])
+        self.assertEqual("Bitte gib eine Telefonnummer an.", response_content["error"])
+        user.refresh_from_db()
+        self.assertEqual("017726254738", user.phone_number)
+        mock_fire_action.assert_not_called()
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_phoneNumberEmptyAndNotRequired_removesPhoneNumber(
+        self, mock_fire_action: Mock
+    ):
+        self._set_parameter(ParameterKeys.MEMBER_PHONE_NUMBER_REQUIRED, False)
+        user = MemberFactory.create(is_superuser=False, phone_number="017726254738")
+
+        response = self._patch_phone_number(user, "")
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        self.assert_order_confirmed(response.json())
+        user.refresh_from_db()
+        self.assertFalse(user.phone_number)
+        mock_fire_action.assert_called_once()
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_setsSecondPhoneNumber_savesIt(self, mock_fire_action: Mock):
+        user = MemberFactory.create(is_superuser=False, phone_number_landline=None)
+        self.client.force_login(user)
+
+        url = reverse("coop:member_personal_data")
+        response = self.client.patch(
+            url,
+            data={
+                "member_id": user.id,
+                "first_name": "test_fn",
+                "last_name": "test_ln",
+                "street": "test_street",
+                "street_2": "test_street2",
+                "phone_number": "017726254738",
+                "phone_number_landline": "+4930123456",
+                "postcode": "12345",
+                "city": "test_city",
+                "is_student": False,
+            },
+            content_type="application/json",
+        )
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertTrue(response_content["order_confirmed"])
+
+        user.refresh_from_db()
+        self.assertEqual("+4930123456", user.phone_number_landline)
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_secondPhoneNumberLeftBlank_isNotRequired(
+        self, mock_fire_action: Mock
+    ):
+        user = MemberFactory.create(is_superuser=False, phone_number_landline=None)
+        self.client.force_login(user)
+
+        url = reverse("coop:member_personal_data")
+        response = self.client.patch(
+            url,
+            data={
+                "member_id": user.id,
+                "first_name": "test_fn",
+                "last_name": "test_ln",
+                "street": "test_street",
+                "street_2": "test_street2",
+                "phone_number": "017726254738",
+                "phone_number_landline": "",
+                "postcode": "12345",
+                "city": "test_city",
+                "is_student": False,
+            },
+            content_type="application/json",
+        )
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertTrue(response_content["order_confirmed"])
+
+        user.refresh_from_db()
+        self.assertIsNone(user.phone_number_landline)
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_secondPhoneNumberIsInvalid_dontApplyChangesAndReturnsError(
+        self, mock_fire_action: Mock
+    ):
+        user = MemberFactory.create(
+            is_superuser=False, phone_number_landline="+4930123456"
+        )
+        self.client.force_login(user)
+
+        url = reverse("coop:member_personal_data")
+        response = self.client.patch(
+            url,
+            data={
+                "member_id": user.id,
+                "first_name": "test_fn",
+                "last_name": "test_ln",
+                "street": "test_street",
+                "street_2": "test_street2",
+                "phone_number": "017726254738",
+                "phone_number_landline": "123",
+                "postcode": "12345",
+                "city": "test_city",
+                "is_student": False,
+            },
+            content_type="application/json",
+        )
+
+        self.assertStatusCode(response, status.HTTP_200_OK)
+        response_content = response.json()
+        self.assertFalse(response_content["order_confirmed"])
+        self.assertEqual(
+            "Ungültige Telefonnummer",
+            response_content["error"],
+        )
+
+        user.refresh_from_db()
+        self.assertEqual("+4930123456", user.phone_number_landline)
+
+        mock_fire_action.assert_not_called()
+        self.assertFalse(UpdateTapirUserLogEntry.objects.exists())
+
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
     def test_patch_normalMemberTriesToChangeStudentStatus_dontApplyChangesAndReturnError(
         self, mock_fire_action: Mock
     ):
@@ -356,7 +613,6 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
                 "last_name": "test_ln",
                 "street": "test_street",
                 "street_2": "test_street2",
-                "email": user.email,
                 "phone_number": "017726254738",
                 "postcode": "12345",
                 "city": "test_city",
@@ -393,10 +649,10 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
                 "last_name": "test_ln",
                 "street": "test_street",
                 "street_2": "test_street2",
-                "email": target.email,
                 "phone_number": "017726254738",
                 "postcode": "12345",
                 "city": "test_city",
+                "country": "DE",
                 "is_student": True,
             },
             content_type="application/json",
@@ -412,30 +668,44 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         target.refresh_from_db()
         self.assertTrue(target.is_student)
 
-    @patch.object(TransactionalTrigger, "fire_action")
-    @patch.object(KeycloakUser, "email_verified", autospec=True)
-    def test_patch_emailChanged_sendsEmailChangeConfirmationButDontChangeCurrentMail(
-        self, mock_email_verified: Mock, mock_fire_action: Mock
+    @patch.object(KeycloakUserManager, "update_keycloak_user_name", autospec=True)
+    @patch.object(TransactionalTrigger, "fire_action", autospec=True)
+    def test_patch_nameChanged_updatesStaticRecipientsAndKeycloak(
+        self, mock_fire_action: Mock, mock_update_keycloak_user_name: Mock
     ):
-        mock_email_verified.return_value = True
-        user_before_changes = MemberFactory.create(email="old_address@example.com")
-        self.client.force_login(user_before_changes)
+        self.client.force_login(MemberFactory.create(is_superuser=True))
+        target_user = MemberFactory.create(is_superuser=False)
+
+        static_segment = StaticSegment.objects.create(name="test_segment")
+        target_recipient = StaticSegmentRecipient.objects.create(
+            segment=static_segment,
+            email=target_user.email,
+            first_name="old_fn",
+            last_name="old_ln",
+        )
+        other_recipient = StaticSegmentRecipient.objects.create(
+            segment=static_segment,
+            email="other@example.com",
+            first_name="old_fn_2",
+            last_name="old_ln_2",
+        )
 
         url = reverse("coop:member_personal_data")
+        data = {
+            "member_id": target_user.id,
+            "first_name": "test_fn",
+            "last_name": "test_ln",
+            "street": "test_street",
+            "street_2": "test_street2",
+            "phone_number": "017726254738",
+            "postcode": "12345",
+            "city": "test_city",
+            "country": "DE",
+            "is_student": False,
+        }
         response = self.client.patch(
             url,
-            data={
-                "member_id": user_before_changes.id,
-                "first_name": "test_fn",
-                "last_name": "test_ln",
-                "street": "test_street",
-                "street_2": "test_street2",
-                "email": "new_address@example.com",
-                "phone_number": "017726254738",
-                "postcode": "12345",
-                "city": "test_city",
-                "is_student": False,
-            },
+            data=data,
             content_type="application/json",
         )
 
@@ -444,37 +714,14 @@ class TestMemberBankDataApiView(TapirIntegrationTest):
         self.assertTrue(response_content["order_confirmed"])
         self.assertIsNone(response_content["error"])
 
-        user_after_changes = Member.objects.get(id=user_before_changes.id)
-        self.assertEqual("old_address@example.com", user_after_changes.email)
-
-        self.assertEqual(3, mock_fire_action.call_count)
-
-        trigger_data: TransactionalTriggerData = mock_fire_action.call_args_list[
-            0
-        ].args[0]
-        self.assertEqual(Events.MEMBERAREA_CHANGE_DATA, trigger_data.key)
-
-        trigger_data: TransactionalTriggerData = mock_fire_action.call_args_list[
-            1
-        ].kwargs["trigger_data"]
-        self.assertEqual(Events.MEMBERAREA_CHANGE_EMAIL_INITIATE, trigger_data.key)
-        self.assertEqual(
-            user_after_changes.id, trigger_data.recipient_id_in_base_queryset
+        mock_update_keycloak_user_name.assert_called_once_with(
+            user=target_user, cache=ANY
         )
-        self.assertIsNone(trigger_data.recipient_outside_of_base_queryset)
-        self.assertEqual(["verify_link"], list(trigger_data.token_data.keys()))
 
-        trigger_data: TransactionalTriggerData = mock_fire_action.call_args_list[
-            2
-        ].kwargs["trigger_data"]
-        self.assertEqual(Events.MEMBERAREA_CHANGE_EMAIL_HINT, trigger_data.key)
-        self.assertEqual(
-            TransactionalTriggerData.RecipientOutsideOfBaseQueryset(
-                email="new_address@example.com",
-                first_name=user_before_changes.first_name,  # We are logged in as not-admin, so the name should not change
-                last_name=user_before_changes.last_name,
-            ),
-            trigger_data.recipient_outside_of_base_queryset,
-        )
-        self.assertIsNone(trigger_data.recipient_id_in_base_queryset)
-        self.assertEqual({}, trigger_data.token_data)
+        target_recipient.refresh_from_db()
+        self.assertEqual("test_fn", target_recipient.first_name)
+        self.assertEqual("test_ln", target_recipient.last_name)
+
+        other_recipient.refresh_from_db()
+        self.assertEqual("old_fn_2", other_recipient.first_name)
+        self.assertEqual("old_ln_2", other_recipient.last_name)

@@ -4,10 +4,12 @@ from django.db.models import Q
 from localflavor.generic.validators import IBANValidator
 
 from tapir.accounts.services.keycloak_user_manager import KeycloakUserManager
+from tapir.configuration.parameter import get_parameter_value
 from tapir.payments.services.member_payment_rhythm_service import (
     MemberPaymentRhythmService,
 )
 from tapir.wirgarten.models import Member, WaitingListEntry
+from tapir.wirgarten.parameter_keys import ParameterKeys
 
 
 class PersonalDataValidator:
@@ -28,7 +30,7 @@ class PersonalDataValidator:
         cls.validate_email_address_not_in_use(
             email, cache=cache, check_waiting_list=check_waiting_list
         )
-        cls.validate_phone_number_is_valid(phone_number)
+        cls.validate_phone_number_is_valid(phone_number, cache=cache)
 
         IBANValidator()(iban)
 
@@ -39,11 +41,18 @@ class PersonalDataValidator:
             payment_rhythm, cache=cache
         ):
             raise ValidationError(
-                f"Diese Zahlungsintervall {payment_rhythm} is nicht erlaubt, erlaubt sind: {MemberPaymentRhythmService.get_allowed_rhythms(cache=cache)}"
+                f"Dieses Zahlungsintervall {payment_rhythm} ist nicht erlaubt, erlaubt sind: {MemberPaymentRhythmService.get_allowed_rhythms(cache=cache)}"
             )
 
     @classmethod
-    def validate_phone_number_is_valid(cls, phone_number: str):
+    def validate_phone_number_is_valid(cls, phone_number: str, cache: dict):
+        if phone_number.strip() == "":
+            if get_parameter_value(
+                key=ParameterKeys.MEMBER_PHONE_NUMBER_REQUIRED, cache=cache
+            ):
+                raise ValidationError("Bitte gib eine Telefonnummer an.")
+            return
+
         try:
             phone_number = phonenumbers.parse(phone_number, "DE")
             if not phonenumbers.is_possible_number(
@@ -63,17 +72,17 @@ class PersonalDataValidator:
 
         if duplicate_email_query.exists():
             raise ValidationError(
-                "Diese E-Mail-Adresse ist schon ein anderes Mitglied zugewiesen."
+                "Diese E-Mail-Adresse ist schon einem anderen Mitglied zugewiesen."
             )
 
         kc = KeycloakUserManager.get_keycloak_client(cache=cache)
         keycloak_id = kc.get_user_id(email)
         if keycloak_id is not None:
             raise ValidationError(
-                "Diese E-Mail-Adresse ist schon ein anderes Benutzer zugewiesen."
+                "Diese E-Mail-Adresse ist schon einem anderen Benutzer zugewiesen."
             )
 
         if check_waiting_list and WaitingListEntry.objects.filter(email=email).exists():
             raise ValidationError(
-                "Diese E-Mail-Adresse ist schon ein anderes Warteliste-Eintrag zugewiesen."
+                "Diese E-Mail-Adresse ist schon einem anderen Wartelisteneintrag zugewiesen."
             )

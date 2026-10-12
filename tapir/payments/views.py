@@ -42,6 +42,7 @@ from tapir.payments.serializers import (
     PaymentTransactionSerializer,
     PaymentTransactionDetailsSerializer,
     JokerCreditIntendedUsePreviewResponseSerializer,
+    MemberNeedingBankingDataSerializer,
 )
 from tapir.payments.services.intended_use_pattern_expander import (
     IntendedUsePatternExpander,
@@ -59,6 +60,9 @@ from tapir.payments.services.month_payment_builder_delivery_charges import (
 )
 from tapir.payments.services.month_payment_builder_solidarity_contributions import (
     MonthPaymentBuilderSolidarityContributions,
+)
+from tapir.payments.services.pain_008_xml_string_generator import (
+    Pain008XmlGenericException,
 )
 from tapir.payments.services.payment_export_builder import PaymentExportBuilder
 from tapir.payments.services.payment_export_intended_use_builder import (
@@ -128,7 +132,9 @@ class GetFutureMemberPaymentsApiView(APIView):
         )
 
         member_credits = MemberCredit.objects.filter(
-            member_id=member_id, due_date__gte=get_today(cache=self.cache)
+            member_id=member_id,
+            due_date__gte=get_today(cache=self.cache),
+            settled_on__isnull=True,
         ).order_by("due_date")
 
         return Response(
@@ -394,8 +400,10 @@ class GetPastMemberPaymentsApiView(APIView):
             member_id=member_id, member_payments=member_payments, cache=self.cache
         )
 
+        is_due_in_the_past = Q(due_date__lte=get_today(cache=self.cache))
+        is_already_settled = Q(settled_on__isnull=False)
         member_credits = MemberCredit.objects.filter(
-            member_id=member_id, due_date__lte=get_today(cache=self.cache)
+            is_due_in_the_past | is_already_settled, member_id=member_id
         ).order_by("-due_date")
 
         return Response(
@@ -498,7 +506,7 @@ class SetMemberPaymentRhythmApiView(APIView):
             rhythm, cache=self.cache
         ):
             raise ValidationError(
-                f"Diese Zahlungsintervall {rhythm} is nicht erlaubt, erlaubt sind: {MemberPaymentRhythmService.get_allowed_rhythms(cache=self.cache)}"
+                f"Dieses Zahlungsintervall {rhythm} ist nicht erlaubt, erlaubt sind: {MemberPaymentRhythmService.get_allowed_rhythms(cache=self.cache)}"
             )
 
         valid_from = MemberPaymentRhythmService.get_date_of_next_payment_rhythm_change(
@@ -1258,13 +1266,23 @@ class RebuildSubscriptionPaymentsApiView(APIView):
 
         try:
             with transaction.atomic():
-                SubscriptionPaymentsRebuilder.rebuild_subscription_payments(
+                errors = SubscriptionPaymentsRebuilder.rebuild_subscription_payments(
                     from_date=from_date, cache=cache
                 )
-        except ValidationError as error:
+        except Pain008XmlGenericException as error:
             return Response(
                 OrderConfirmationResponseSerializer(
                     {"order_confirmed": False, "error": error.message}
+                ).data
+            )
+
+        if len(errors) > 0:
+            return Response(
+                OrderConfirmationResponseSerializer(
+                    {
+                        "order_confirmed": False,
+                        "error": f"Die Lastschriften konnten neu erzeugt werden, es sind aber folgenden Fehler aufgetreten. Die betroffene Mitglieder sind nicht in der neue Dateien enthalten. {", ".join(sorted(errors))}",
+                    }
                 ).data
             )
 
@@ -1273,3 +1291,47 @@ class RebuildSubscriptionPaymentsApiView(APIView):
                 {"order_confirmed": True, "error": None}
             ).data
         )
+
+
+class MembersNeedingBankingDataApiView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasCoopManagePermission]
+
+    @extend_schema(responses={200: MemberNeedingBankingDataSerializer(many=True)})
+    def get(self, request: Request):
+        members = Member.objects.needing_banking_data().order_by(
+            "member_no", "last_name"
+        )
+        return Response(MemberNeedingBankingDataSerializer(members, many=True).data)
+
+
+class MembersNeedingBankingDataForRebuildApiView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasCoopManagePermission]
+
+    @extend_schema(
+        responses={200: MemberNeedingBankingDataSerializer(many=True)},
+        parameters=[
+            OpenApiParameter(name="from", type=OpenApiTypes.DATE, required=True)
+        ],
+    )
+    def get(self, request: Request):
+        cache = {}
+        from_date = datetime.datetime.strptime(
+            request.query_params["from"], "%Y-%m-%d"
+        ).date()
+
+        member_ids = (
+            Payment.objects.exclude(type=payments_config.PAYMENT_TYPE_COOP_SHARES)
+            .filter(
+                transaction__month__gte=from_date.replace(day=1),
+                transaction__month__lte=get_today(cache=cache),
+            )
+            .values_list("mandate_ref__member_id", flat=True)
+            .distinct()
+        )
+
+        members = (
+            Member.objects.filter(id__in=member_ids)
+            .needing_banking_data()
+            .order_by("member_no", "last_name")
+        )
+        return Response(MemberNeedingBankingDataSerializer(members, many=True).data)

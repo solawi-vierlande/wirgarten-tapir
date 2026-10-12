@@ -64,7 +64,7 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
       .catch((error) =>
         handleRequestError(
           error,
-          "Fehler bei der Anmeldung an eine Liste",
+          "Fehler bei der Anmeldung bei einer Liste",
           setToastDatas,
         ),
       )
@@ -85,7 +85,7 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
       .catch((error) =>
         handleRequestError(
           error,
-          "Fehler bei der Abmeldung an eine Liste",
+          "Fehler bei der Abmeldung von einer Liste",
           setToastDatas,
         ),
       )
@@ -106,7 +106,7 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
       .catch((error) =>
         handleRequestError(
           error,
-          "Fehler bei der Bestätigung der Einladung an eine Liste",
+          "Fehler bei der Bestätigung der Einladung zu einer Liste",
           setToastDatas,
         ),
       )
@@ -127,11 +127,58 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
       .catch((error) =>
         handleRequestError(
           error,
-          "Fehler beim Ablehnen der Einladung an eine Liste",
+          "Fehler beim Ablehnen der Einladung zu einer Liste",
           setToastDatas,
         ),
       )
       .finally(() => setListLoading(undefined));
+  }
+
+  function buildHelpText() {
+    return (
+      <>
+        <p>
+          Über eine Mailing-Liste kannst du dich per E-Mail mit anderen
+          Mitgliedern austauschen: Eine E-Mail an die Adresse der Liste wird an
+          alle weitergeleitet, die an der Liste teilnehmen.
+        </p>
+        <p>Was die Spalten bedeuten:</p>
+        <ul>
+          <li>
+            <strong>Liste</strong>: die E-Mail-Adresse der Liste. An diese
+            Adresse schreibst du, um alle Teilnehmenden zu erreichen.
+          </li>
+          <li>
+            <strong>Beschreibung</strong>: Mit einem Klick auf das Fragezeichen
+            siehst du, wofür die Liste gedacht ist.
+          </li>
+          <li>
+            <strong>Teilnahme</strong>: <em>Ja</em> – du nimmst teil und
+            bekommst die E-Mails der Liste. <em>Nein</em> – du nimmst nicht
+            teil. <em>Eingeladen</em> – du wurdest eingeladen und nimmst erst
+            teil, wenn du die Einladung annimmst.
+          </li>
+        </ul>
+        <p>So funktioniert es:</p>
+        <ul>
+          <li>
+            Mit „Anmelden“ nimmst du sofort an der Liste teil, und zwar mit der
+            E-Mail-Adresse aus deinem Profil. Du musst nichts weiter bestätigen
+            und bekommst auch keine Bestätigungs-E-Mail. Dass die Anmeldung
+            geklappt hat, erkennst du daran, dass bei Teilnahme „Ja“ steht.
+          </li>
+          <li>
+            Um an alle zu schreiben, schickst du aus deinem E-Mail-Programm eine
+            E-Mail an die Adresse der Liste. Nutze dafür die E-Mail-Adresse aus
+            deinem Profil als Absender.
+          </li>
+          <li>
+            Mit „Abmelden“ beendest du deine Teilnahme. Du bekommst dann keine
+            E-Mails der Liste mehr.
+          </li>
+        </ul>
+      </>
+    );
   }
 
   function buildParticipation(list: MailingList) {
@@ -157,8 +204,8 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
   function buildInvitationHelpText(list: MailingList) {
     let text = (
       <p>
-        Du bist zu diese Liste eingeladen. Du kannst die Einladung annehmen oder
-        ablehnen.
+        Du bist zu dieser Liste eingeladen. Du kannst die Einladung annehmen
+        oder ablehnen.
       </p>
     );
 
@@ -184,7 +231,7 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
           size={"sm"}
           variant={"primary"}
           icon={"unsubscribe"}
-          text={"Sich abmelden"}
+          text={"Abmelden"}
           onClick={() => onUnsubscribe(list)}
         />
       );
@@ -197,14 +244,14 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
             size={"sm"}
             variant={"primary"}
             icon={"mark_email_read"}
-            text={"Anmeldung bestätigen"}
+            text={"Einladung annehmen"}
             onClick={() => onConfirm(list)}
           />
           <TapirButton
             size={"sm"}
             variant={"primary"}
             icon={"unsubscribe"}
-            text={"Anmeldung ablehnen"}
+            text={"Einladung ablehnen"}
             onClick={() => onReject(list)}
           />
         </span>
@@ -216,7 +263,7 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
         size={"sm"}
         variant={"primary"}
         icon={"mail"}
-        text={"Sich anmelden"}
+        text={"Anmelden"}
         onClick={() => onSubscribe(list)}
         loading={listLoading === list}
       />
@@ -233,7 +280,7 @@ const MemberMailingListsCard: React.FC<MemberMailCategoryModalProps> = ({
             }
           >
             <h5 className={"mb-0"}>Mailing-Listen</h5>
-            <TapirHelpButton text={"HelpText Mailing-List Mitgliederbereich"} />
+            <TapirHelpButton text={buildHelpText()} width={"600px"} />
           </span>
         </Card.Header>
         <Card.Body>

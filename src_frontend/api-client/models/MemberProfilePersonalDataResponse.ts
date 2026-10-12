@@ -35,13 +35,13 @@ export interface MemberProfilePersonalDataResponse {
    * @type {string}
    * @memberof MemberProfilePersonalDataResponse
    */
-  email: string;
+  phoneNumber: string;
   /**
    *
    * @type {string}
    * @memberof MemberProfilePersonalDataResponse
    */
-  phoneNumber: string;
+  phoneNumberLandline?: string | null;
   /**
    *
    * @type {string}
@@ -84,6 +84,36 @@ export interface MemberProfilePersonalDataResponse {
    * @memberof MemberProfilePersonalDataResponse
    */
   canEditName: boolean;
+  /**
+   *
+   * @type {string}
+   * @memberof MemberProfilePersonalDataResponse
+   */
+  country: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof MemberProfilePersonalDataResponse
+   */
+  canEditCountry: boolean;
+  /**
+   *
+   * @type {string}
+   * @memberof MemberProfilePersonalDataResponse
+   */
+  contactEmail: string;
+  /**
+   *
+   * @type {string}
+   * @memberof MemberProfilePersonalDataResponse
+   */
+  memberNumber: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof MemberProfilePersonalDataResponse
+   */
+  phoneNumberRequired: boolean;
 }
 
 /**
@@ -94,7 +124,6 @@ export function instanceOfMemberProfilePersonalDataResponse(
 ): value is MemberProfilePersonalDataResponse {
   if (!("firstName" in value) || value["firstName"] === undefined) return false;
   if (!("lastName" in value) || value["lastName"] === undefined) return false;
-  if (!("email" in value) || value["email"] === undefined) return false;
   if (!("phoneNumber" in value) || value["phoneNumber"] === undefined)
     return false;
   if (!("street" in value) || value["street"] === undefined) return false;
@@ -104,6 +133,18 @@ export function instanceOfMemberProfilePersonalDataResponse(
   if (!("canEditStudent" in value) || value["canEditStudent"] === undefined)
     return false;
   if (!("canEditName" in value) || value["canEditName"] === undefined)
+    return false;
+  if (!("country" in value) || value["country"] === undefined) return false;
+  if (!("canEditCountry" in value) || value["canEditCountry"] === undefined)
+    return false;
+  if (!("contactEmail" in value) || value["contactEmail"] === undefined)
+    return false;
+  if (!("memberNumber" in value) || value["memberNumber"] === undefined)
+    return false;
+  if (
+    !("phoneNumberRequired" in value) ||
+    value["phoneNumberRequired"] === undefined
+  )
     return false;
   return true;
 }
@@ -124,8 +165,11 @@ export function MemberProfilePersonalDataResponseFromJSONTyped(
   return {
     firstName: json["first_name"],
     lastName: json["last_name"],
-    email: json["email"],
     phoneNumber: json["phone_number"],
+    phoneNumberLandline:
+      json["phone_number_landline"] == null
+        ? undefined
+        : json["phone_number_landline"],
     street: json["street"],
     street2: json["street_2"],
     postcode: json["postcode"],
@@ -133,6 +177,11 @@ export function MemberProfilePersonalDataResponseFromJSONTyped(
     isStudent: json["is_student"] == null ? undefined : json["is_student"],
     canEditStudent: json["can_edit_student"],
     canEditName: json["can_edit_name"],
+    country: json["country"],
+    canEditCountry: json["can_edit_country"],
+    contactEmail: json["contact_email"],
+    memberNumber: json["member_number"],
+    phoneNumberRequired: json["phone_number_required"],
   };
 }
 
@@ -153,8 +202,8 @@ export function MemberProfilePersonalDataResponseToJSONTyped(
   return {
     first_name: value["firstName"],
     last_name: value["lastName"],
-    email: value["email"],
     phone_number: value["phoneNumber"],
+    phone_number_landline: value["phoneNumberLandline"],
     street: value["street"],
     street_2: value["street2"],
     postcode: value["postcode"],
@@ -162,5 +211,10 @@ export function MemberProfilePersonalDataResponseToJSONTyped(
     is_student: value["isStudent"],
     can_edit_student: value["canEditStudent"],
     can_edit_name: value["canEditName"],
+    country: value["country"],
+    can_edit_country: value["canEditCountry"],
+    contact_email: value["contactEmail"],
+    member_number: value["memberNumber"],
+    phone_number_required: value["phoneNumberRequired"],
   };
 }

@@ -1,5 +1,6 @@
 import datetime
 
+from tapir.accounts.services.email_normaliser import EmailNormaliser
 from tapir.accounts.services.keycloak_user_manager import KeycloakUserManager
 from tapir.associations.models import (
     AssociationMembership,
@@ -68,10 +69,8 @@ class MemberImporter:
 
     @classmethod
     def update_existing_member_if_necessary(cls, member: Member, row: dict[str, str]):
-        member_attributes_updated = (
-            cls.update_member_attributes_and_save_member_without_keycloak(
-                member=member, row=row
-            )
+        member_attributes_updated = cls.update_member_attributes_and_save_member(
+            member=member, row=row
         )
         pickup_location_updated = cls.update_member_pickup_location(
             member=member, row=row
@@ -127,7 +126,7 @@ class MemberImporter:
         return True
 
     @classmethod
-    def update_member_attributes_and_save_member_without_keycloak(
+    def update_member_attributes_and_save_member(
         cls, member: Member, row: dict[str, str]
     ):
         member_updated = False
@@ -146,6 +145,7 @@ class MemberImporter:
             "Kontoinhaber": "account_owner",
             "consent_sepa": "sepa_consent",
             "privacy_consent": "privacy_consent",
+            "Pseudonym": "pseudonym",
         }
 
         map_from_row_header_to_converter = {
@@ -189,6 +189,7 @@ class MemberImporter:
             target_mail,
         ):
             member_updated = True
+            member.username = member.email
 
         if email_before != member.email and member.keycloak_id:
             Member.objects.filter(id=member.id).update(email=member.email)
@@ -197,7 +198,7 @@ class MemberImporter:
             )
 
         if member_updated:
-            member.save(bypass_keycloak=True)
+            member.save()
 
         return member_updated
 
@@ -207,9 +208,10 @@ class MemberImporter:
         if target_mail == "":
             return f"team+missing_mail_katringer_{member_no}@foodcoopx.de"
 
-        return cls.build_mail_with_suffix(
+        with_suffix = cls.build_mail_with_suffix(
             original_mail=target_mail, member_no=member_no
         )
+        return EmailNormaliser.normalise(with_suffix)
 
     @classmethod
     def build_mail_with_suffix(cls, original_mail: str, member_no: int):
@@ -318,9 +320,7 @@ class MemberImporter:
         member = Member(
             member_no=member_no,
         )
-        cls.update_member_attributes_and_save_member_without_keycloak(
-            member=member, row=row
-        )
+        cls.update_member_attributes_and_save_member(member=member, row=row)
 
         pickup_location = cls.get_pickup_location_by_name(
             name=DataImportUtils.normalize_cell(row.get("Abholort"))

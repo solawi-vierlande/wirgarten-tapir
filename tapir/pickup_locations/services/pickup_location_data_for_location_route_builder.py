@@ -63,6 +63,9 @@ class PickupLocationDataForLocationRouteBuilder:
             "postcode": pickup_location.postcode,
             "city": pickup_location.city,
             "route_info": pickup_location.route_info,
+            "show_details_in_basket_totals_export": (
+                pickup_location.show_details_in_basket_totals_export
+            ),
             "headers": cls.get_headers(
                 cache=cache, reference_date=reference_datetime.date()
             ),
@@ -105,6 +108,8 @@ class PickupLocationDataForLocationRouteBuilder:
                     values[basket_name] += quantity * subscription.quantity
         elif picking_mode == PICKING_MODE_SHARE:
             for subscription in subscriptions:
+                if subscription.product.hidden_in_bestell_wizard:
+                    continue
                 values[subscription.product_id] += subscription.quantity
 
         return values
@@ -121,6 +126,7 @@ class PickupLocationDataForLocationRouteBuilder:
             if DeliveryCycleService.is_product_type_delivered_in_week(
                 product_type=product.type, date=reference_date, cache=cache
             )
+            and not product.hidden_in_bestell_wizard
         ]
         products = sorted(
             products,

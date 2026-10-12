@@ -19,6 +19,9 @@ Vertragsende: {{BestellWizard: Mitgliedschaft + Ernteanteile.Vertragsende}} <br 
 
 Erste Abholung am: {{BestellWizard: Mitgliedschaft + Ernteanteile.Erste Abholung am}} <br /><br />
 
+Gesamtbetrag monatlich: {{BestellWizard: Mitgliedschaft + Ernteanteile.Gesamtbetrag monatlich}} € <br />
+Abbuchungsrhythmus: {{BestellWizard: Mitgliedschaft + Ernteanteile.Abbuchungsrhythmus}} <br />
+
 Wir prüfen nun die Bestellung und melden uns bei dir, sobald dies geschehen ist. <br /><br />
 
 Wir freuen uns sehr über dein Interesse. <br /><br />
@@ -37,15 +40,17 @@ Folgende Tokens sind hier relevant: <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Vertragsstart}} <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Vertragsende}} <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Erste Abholung am}} <br />
+{{BestellWizard: Mitgliedschaft + Ernteanteile.Gesamtbetrag monatlich}} <br />
+{{BestellWizard: Mitgliedschaft + Ernteanteile.Abbuchungsrhythmus}} <br />
 <br />
 Für Genossenschaften kommen dazu: <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Anzahl der gezeichneten Genossenschaftsanteile}} <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Wert Genossenschaftsanteil}} <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Gesamtwert der gezeichneten Genossenschaftsanteile}} <br />
-{{BestellWizard: Mitgliedschaft + Ernteanteile.Beitrittsdatum in der Genossenschaft}} <br />
+{{BestellWizard: Mitgliedschaft + Ernteanteile.Beitrittsdatum Geno/Verein}} <br />
 <br />
 Für Vereine kommen dazu: <br />
-{{BestellWizard: Mitgliedschaft + Ernteanteile.Beitrittsdatum in der Genossenschaft}} (das Token heißt so aber betrifft auch Vereine)<br />
+{{BestellWizard: Mitgliedschaft + Ernteanteile.Beitrittsdatum Geno/Verein}} <br />
 {{BestellWizard: Mitgliedschaft + Ernteanteile.Vereinsmitgliedschaft - Monatspreis}}<br />
             </mj-text>
         </mj-column>

@@ -20,6 +20,9 @@ from tapir.core.services.organisation_entry_date_annotator import (
 from tapir.pickup_locations.services.pickup_location_mail_token_service import (
     PickupLocationMailTokenService,
 )
+from tapir.subscriptions.services.order_confirmation_mail_token_builder import (
+    OrderConfirmationMailTokenBuilder,
+)
 from tapir.wirgarten.mail_events import Events
 from tapir.wirgarten.models import WaitingListEntry, Member
 from tapir.wirgarten.parameter_keys import ParameterKeys
@@ -30,11 +33,18 @@ TOKENS_COOP_ENTRY = {
     "Anzahl der gezeichneten Genossenschaftsanteile": "number_of_coop_shares",
     "Wert Genossenschaftsanteil": "price_of_a_coop_share",
     "Gesamtwert der gezeichneten Genossenschaftsanteile": "total_cost",
-    "Beitrittsdatum in der Genossenschaft": "membership_start_date",
+    "Beitrittsdatum Geno/Verein": "membership_start_date",
     "Solidarbeitrag - Betrag": "solidarity_contribution_amount",
     "Solidarbeitrag - Startdatum": "solidarity_contribution_start_date",
     "Vereinsmitgliedschaft - Monatspreis": "membership_monthly_price",
 }
+
+TOKENS_ORDER_PAYMENT = {
+    "Gesamtbetrag monatlich": "monthly_total",
+    "Abbuchungsrhythmus": "payment_rhythm",
+}
+
+TOKEN_FIRST_PICKUP_DATE = "Erste Abholung am"
 
 
 class Segments:
@@ -116,6 +126,7 @@ def _register_tokens():
             "Verteilstation - Zusatzinfos": PickupLocationMailTokenService.pickup_location_info,
             "Verteilstation - Abholzeiten": PickupLocationMailTokenService.pickup_location_opening_times,
             "Newsletter - Verwaltungslink": NewsletterManagementLinkProvider.get_newsletter_management_link,
+            TOKEN_FIRST_PICKUP_DATE: OrderConfirmationMailTokenBuilder.get_first_pickup_date_for_recipient,
         },
     )
 
@@ -128,15 +139,16 @@ def _register_triggers():
             "Vertragsliste": "contract_list",
             "Vertragsstart": "contract_start_date",
             "Vertragsende": "contract_end_date",
-            "Erste Abholung am": "first_pickup_date",
+            TOKEN_FIRST_PICKUP_DATE: "first_pickup_date",
         }
+        | TOKENS_ORDER_PAYMENT
         | TOKENS_COOP_ENTRY,
         required=True,
     )
     register_transactional_trigger(
-        name="BestellWizard: Nur Geno-Mitgliedschaft",
+        name="BestellWizard: Nur Geno-/Vereinsmitgliedschaft",
         key=Events.REGISTER_MEMBERSHIP_ONLY,
-        tokens=TOKENS_COOP_ENTRY,
+        tokens=TOKENS_ORDER_PAYMENT | TOKENS_COOP_ENTRY,
         required=lambda: legal_status_is_cooperative(cache={}),
     )
     register_transactional_trigger(
@@ -146,7 +158,7 @@ def _register_triggers():
             "Vertragsliste": "contract_list",
             "Vertragsstart": "contract_start_date",
             "Vertragsende": "contract_end_date",
-            "Erste Abholung am": "first_pickup_date",
+            TOKEN_FIRST_PICKUP_DATE: "first_pickup_date",
         },
         required=True,
     )
@@ -159,6 +171,13 @@ def _register_triggers():
         tokens={
             "Neuer Abholort": "pickup_location",
             "Gültig ab": "pickup_location_start_date",
+            "Neuer Abholort - Adresse": "address",
+            "Neuer Abholort - Zugangscode": "access_code",
+            "Neuer Abholort - Messenger-Gruppe": "messenger_group_link",
+            "Neuer Abholort - Kontaktname": "contact_name",
+            "Neuer Abholort - Photo-Link": "photo_link",
+            "Neuer Abholort - Zusatzinfos": "infos",
+            "Neuer Abholort - Abholzeiten": "opening_times",
         },
         required=True,
     )
@@ -183,7 +202,7 @@ def _register_triggers():
     )
 
     register_transactional_trigger(
-        name="Kündigung im Probemonat",
+        name="Kündigung in der Probezeit",
         key=Events.TRIAL_CANCELLATION,
         tokens={
             "Vertragsliste": "contract_list",
@@ -217,6 +236,7 @@ def _register_triggers():
             "Anzahl gezeichnete Geschäftsanteile": "number_of_coop_shares",
             "Wert Geno-Anteil": "price_of_a_share",
             "Gesamtwert der gezeichneten Geschäftsanteile": "price_of_all_shares",
+            "Beitrittsdatum Genossenschaft": "membership_start_date",
         },
         required=lambda: legal_status_is_cooperative(cache={}),
     )
@@ -257,8 +277,9 @@ def _register_triggers():
             "Vertragsliste": "contract_list",
             "Vertragsstart": "contract_start_date",
             "Vertragsende": "contract_end_date",
-            "Erste Abholung am": "first_pickup_date",
+            TOKEN_FIRST_PICKUP_DATE: "first_pickup_date",
         }
+        | TOKENS_ORDER_PAYMENT
         | TOKENS_COOP_ENTRY,
         required=True,
     )
@@ -274,7 +295,7 @@ def _register_triggers():
     )
 
     register_transactional_trigger(
-        name="Bestellung widerruft",
+        name="Bestellung widerrufen",
         key=Events.ORDER_REVOKED,
         tokens={
             "Vertragsliste": "contract_list",
