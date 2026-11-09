@@ -153,3 +153,33 @@ class AdminImportMemberResponseSerializer(serializers.Serializer):
     member_id = serializers.CharField()
     was_existing = serializers.BooleanField()
     order_imported = serializers.BooleanField()
+
+
+class PickupLocationChangeSerializer(serializers.Serializer):
+    valid_from = serializers.DateField()
+    pickup_location_id = serializers.CharField()
+
+
+class ImportMemberSubscriptionRequestSerializer(serializers.Serializer):
+    member_id = serializers.CharField()
+    growing_period_id = serializers.CharField()
+    shopping_cart_order = serializers.DictField(child=serializers.IntegerField())
+    pickup_location_ids = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    pickup_location_changes = PickupLocationChangeSerializer(
+        many=True, required=False, default=list
+    )
+
+
+class ImportMemberSubscriptionResponseSerializer(serializers.Serializer):
+    created_subscription_ids = serializers.ListField(
+        child=serializers.CharField()
+    )
+    skipped_existing_product_ids = serializers.ListField(
+        child=serializers.CharField()
+    )
+    updated_existing_product_ids = serializers.ListField(
+        child=serializers.CharField()
+    )
+    pickup_location_created = serializers.BooleanField()

@@ -45,6 +45,11 @@ urlpatterns = [
         views.AdminImportMemberApiView.as_view(),
         name="admin-import-member",
     ),
+    path(
+        "admin/import_member_subscription/",
+        views.AdminImportMemberSubscriptionApiView.as_view(),
+        name="admin-import-member-subscription",
+    ),
 ]
 
 router = DefaultRouter()
