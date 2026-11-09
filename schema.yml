@@ -2662,6 +2662,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminImportMemberResponse'
           description: ''
+  /coop/admin/import_member_subscription/:
+    post:
+      operationId: coop_admin_import_member_subscription_create
+      description: |-
+        Admin-only: reconcile subscriptions for one existing member.
+
+        Creates missing subscriptions, aligns the quantity of an existing
+        subscription in the target period, and applies the pickup-location
+        timeline. Subscriptions in other periods are left untouched.
+      tags:
+      - coop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportMemberSubscriptionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportMemberSubscriptionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportMemberSubscriptionRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - cookieAuth: []
+      - DrfForwardAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportMemberSubscriptionResponse'
+          description: ''
   /coop/api/delete_member:
     delete:
       operationId: coop_api_delete_member_destroy
@@ -5241,7 +5275,6 @@ paths:
         name: id
         schema:
           type: string
-        description: Ein eindeutiger Wert, der pickup location identifiziert.
         required: true
       tags:
       - pickup_locations
@@ -12483,6 +12516,54 @@ components:
       - joker_restrictions
       - jokers_enabled
       - max_jokers_per_member
+    ImportMemberSubscriptionRequestRequest:
+      type: object
+      properties:
+        member_id:
+          type: string
+          minLength: 1
+        growing_period_id:
+          type: string
+          minLength: 1
+        shopping_cart_order:
+          type: object
+          additionalProperties:
+            type: integer
+        pickup_location_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        pickup_location_changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PickupLocationChangeRequest'
+      required:
+      - growing_period_id
+      - member_id
+      - shopping_cart_order
+    ImportMemberSubscriptionResponse:
+      type: object
+      properties:
+        created_subscription_ids:
+          type: array
+          items:
+            type: string
+        skipped_existing_product_ids:
+          type: array
+          items:
+            type: string
+        updated_existing_product_ids:
+          type: array
+          items:
+            type: string
+        pickup_location_created:
+          type: boolean
+      required:
+      - created_subscription_ids
+      - pickup_location_created
+      - skipped_existing_product_ids
+      - updated_existing_product_ids
     Ingredient:
       type: object
       properties:
@@ -15198,6 +15279,18 @@ components:
       required:
       - data_points
       - table_headers
+    PickupLocationChangeRequest:
+      type: object
+      properties:
+        valid_from:
+          type: string
+          format: date
+        pickup_location_id:
+          type: string
+          minLength: 1
+      required:
+      - pickup_location_id
+      - valid_from
     PickupLocationDeliveryChargeCreateRequestRequest:
       type: object
       properties:

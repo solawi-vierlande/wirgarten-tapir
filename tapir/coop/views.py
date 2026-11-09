@@ -34,6 +34,8 @@ from tapir.configuration.parameter import get_parameter_value
 from tapir.coop.serializers import (
     AdminImportMemberRequestSerializer,
     AdminImportMemberResponseSerializer,
+    ImportMemberSubscriptionRequestSerializer,
+    ImportMemberSubscriptionResponseSerializer,
     MinimumNumberOfSharesResponseSerializer,
     GetCoopShareTransactionsResponseSerializer,
     ExistingMemberPurchasesSharesRequestSerializer,
@@ -46,6 +48,9 @@ from tapir.coop.serializers import (
 )
 from tapir.coop.services.admin_import_member_service import (
     AdminImportMemberService,
+)
+from tapir.coop.services.ensure_member_subscriptions_service import (
+    EnsureMemberSubscriptionsService,
 )
 from tapir.coop.services.coop_membership_cancellation_manager import (
     CoopMembershipCancellationManager,
@@ -85,6 +90,7 @@ from tapir.wirgarten.models import (
     QuestionaireTrafficSourceResponse,
     QuestionaireCancellationReasonResponse,
     MandateReference,
+    GrowingPeriod,
 )
 from tapir.wirgarten.parameter_keys import ParameterKeys
 from tapir.wirgarten.utils import (
@@ -797,6 +803,56 @@ class AdminImportMemberApiView(APIView):
                     "member_id": str(member.id),
                     "was_existing": was_existing,
                     "order_imported": True,
+                }
+            ).data
+        )
+
+
+class AdminImportMemberSubscriptionApiView(APIView):
+    """Admin-only: reconcile subscriptions for one existing member.
+
+    Creates missing subscriptions, aligns the quantity of an existing
+    subscription in the target period, and applies the pickup-location
+    timeline. Subscriptions in other periods are left untouched.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasCoopManagePermission]
+
+    @extend_schema(
+        request=ImportMemberSubscriptionRequestSerializer,
+        responses={200: ImportMemberSubscriptionResponseSerializer},
+    )
+    def post(self, request):
+        serializer = ImportMemberSubscriptionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        member = get_object_or_404(Member, id=data["member_id"])
+        growing_period = get_object_or_404(
+            GrowingPeriod, id=data["growing_period_id"]
+        )
+
+        (
+            created,
+            updated,
+            skipped,
+            pickup_created,
+        ) = EnsureMemberSubscriptionsService.ensure(
+            member=member,
+            growing_period=growing_period,
+            shopping_cart=data["shopping_cart_order"],
+            pickup_location_ids=data.get("pickup_location_ids") or [],
+            pickup_location_changes=data.get("pickup_location_changes") or [],
+            actor=request.user,
+        )
+
+        return Response(
+            ImportMemberSubscriptionResponseSerializer(
+                {
+                    "created_subscription_ids": created,
+                    "updated_existing_product_ids": updated,
+                    "skipped_existing_product_ids": skipped,
+                    "pickup_location_created": pickup_created,
                 }
             ).data
         )

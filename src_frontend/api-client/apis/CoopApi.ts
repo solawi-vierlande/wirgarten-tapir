@@ -17,6 +17,8 @@ import type {
   AdminImportMemberResponse,
   ExistingMemberPurchasesSharesRequestRequest,
   GetCoopShareTransactionsResponse,
+  ImportMemberSubscriptionRequestRequest,
+  ImportMemberSubscriptionResponse,
   Member,
   MemberBankDataResponse,
   MemberEmailRequestRequest,
@@ -32,6 +34,8 @@ import {
   AdminImportMemberResponseFromJSON,
   ExistingMemberPurchasesSharesRequestRequestToJSON,
   GetCoopShareTransactionsResponseFromJSON,
+  ImportMemberSubscriptionRequestRequestToJSON,
+  ImportMemberSubscriptionResponseFromJSON,
   MemberBankDataResponseFromJSON,
   MemberEmailRequestRequestToJSON,
   MemberEmailResponseFromJSON,
@@ -46,6 +50,10 @@ import * as runtime from "../runtime";
 
 export interface CoopAdminImportMemberCreateRequest {
   adminImportMemberRequestRequest: AdminImportMemberRequestRequest;
+}
+
+export interface CoopAdminImportMemberSubscriptionCreateRequest {
+  importMemberSubscriptionRequestRequest: ImportMemberSubscriptionRequestRequest;
 }
 
 export interface CoopApiDeleteMemberDestroyRequest {
@@ -157,6 +165,72 @@ export class CoopApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<AdminImportMemberResponse> {
     const response = await this.coopAdminImportMemberCreateRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Admin-only: reconcile subscriptions for one existing member.  Creates missing subscriptions, aligns the quantity of an existing subscription in the target period, and applies the pickup-location timeline. Subscriptions in other periods are left untouched.
+   */
+  async coopAdminImportMemberSubscriptionCreateRaw(
+    requestParameters: CoopAdminImportMemberSubscriptionCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ImportMemberSubscriptionResponse>> {
+    if (requestParameters["importMemberSubscriptionRequestRequest"] == null) {
+      throw new runtime.RequiredError(
+        "importMemberSubscriptionRequestRequest",
+        'Required parameter "importMemberSubscriptionRequestRequest" was null or undefined when calling coopAdminImportMemberSubscriptionCreate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.apiKey) {
+      headerParameters["Authorization"] =
+        await this.configuration.apiKey("Authorization"); // tokenAuth authentication
+    }
+
+    if (
+      this.configuration &&
+      (this.configuration.username !== undefined ||
+        this.configuration.password !== undefined)
+    ) {
+      headerParameters["Authorization"] =
+        "Basic " +
+        btoa(this.configuration.username + ":" + this.configuration.password);
+    }
+    const response = await this.request(
+      {
+        path: `/coop/admin/import_member_subscription/`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ImportMemberSubscriptionRequestRequestToJSON(
+          requestParameters["importMemberSubscriptionRequestRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ImportMemberSubscriptionResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Admin-only: reconcile subscriptions for one existing member.  Creates missing subscriptions, aligns the quantity of an existing subscription in the target period, and applies the pickup-location timeline. Subscriptions in other periods are left untouched.
+   */
+  async coopAdminImportMemberSubscriptionCreate(
+    requestParameters: CoopAdminImportMemberSubscriptionCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ImportMemberSubscriptionResponse> {
+    const response = await this.coopAdminImportMemberSubscriptionCreateRaw(
       requestParameters,
       initOverrides,
     );

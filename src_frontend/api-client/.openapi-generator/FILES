@@ -116,6 +116,8 @@ models/GroupedEmailDispatch.ts
 models/GrowingPeriod.ts
 models/GrowingPeriodRequest.ts
 models/GrowingPeriodWithDeliveryDayAdjustments.ts
+models/ImportMemberSubscriptionRequestRequest.ts
+models/ImportMemberSubscriptionResponse.ts
 models/Ingredient.ts
 models/IngredientRequest.ts
 models/Joker.ts
@@ -234,6 +236,7 @@ models/PickupLocationCapacityChangePoint.ts
 models/PickupLocationCapacityCheckRequestRequest.ts
 models/PickupLocationCapacityCheckResponse.ts
 models/PickupLocationCapacityEvolution.ts
+models/PickupLocationChangeRequest.ts
 models/PickupLocationDeliveryChargeCreateRequestRequest.ts
 models/PickupLocationDeliveryChargeEntry.ts
 models/PickupLocationDeliveryChargesResponse.ts
