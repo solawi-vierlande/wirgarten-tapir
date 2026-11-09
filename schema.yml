@@ -2627,6 +2627,35 @@ paths:
                   items:
                     type: string
           description: ''
+  /coop/admin/cancel_member_subscription/:
+    post:
+      operationId: coop_admin_cancel_member_subscription_create
+      description: 'Admin-only: cancel one subscription for a member/product/period.'
+      tags:
+      - coop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelMemberSubscriptionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelMemberSubscriptionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelMemberSubscriptionRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - cookieAuth: []
+      - DrfForwardAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelMemberSubscriptionResponse'
+          description: ''
   /coop/admin/import_member/:
     post:
       operationId: coop_admin_import_member_create
@@ -10524,6 +10553,57 @@ components:
       required:
       - can_change
       - current_rhythm
+    CancelMemberSubscriptionRequestRequest:
+      type: object
+      properties:
+        member_id:
+          type: string
+          minLength: 1
+        growing_period_id:
+          type: string
+          minLength: 1
+        product_id:
+          type: string
+          minLength: 1
+        end_date:
+          type: string
+          format: date
+        cancellation_ts:
+          type: string
+          format: date-time
+      required:
+      - cancellation_ts
+      - end_date
+      - growing_period_id
+      - member_id
+      - product_id
+    CancelMemberSubscriptionResponse:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+        already_cancelled:
+          type: boolean
+        deleted:
+          type: boolean
+        subscription_id:
+          type: string
+          nullable: true
+        previous_end_date:
+          type: string
+          format: date
+          nullable: true
+        new_end_date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - already_cancelled
+      - cancelled
+      - deleted
+      - new_end_date
+      - previous_end_date
+      - subscription_id
     CancelSubscriptionsRequestRequest:
       type: object
       properties:

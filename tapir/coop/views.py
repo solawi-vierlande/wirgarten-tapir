@@ -36,6 +36,8 @@ from tapir.coop.serializers import (
     AdminImportMemberResponseSerializer,
     ImportMemberSubscriptionRequestSerializer,
     ImportMemberSubscriptionResponseSerializer,
+    CancelMemberSubscriptionRequestSerializer,
+    CancelMemberSubscriptionResponseSerializer,
     MinimumNumberOfSharesResponseSerializer,
     GetCoopShareTransactionsResponseSerializer,
     ExistingMemberPurchasesSharesRequestSerializer,
@@ -51,6 +53,9 @@ from tapir.coop.services.admin_import_member_service import (
 )
 from tapir.coop.services.ensure_member_subscriptions_service import (
     EnsureMemberSubscriptionsService,
+)
+from tapir.coop.services.cancel_member_subscription_service import (
+    CancelMemberSubscriptionService,
 )
 from tapir.coop.services.coop_membership_cancellation_manager import (
     CoopMembershipCancellationManager,
@@ -91,6 +96,7 @@ from tapir.wirgarten.models import (
     QuestionaireCancellationReasonResponse,
     MandateReference,
     GrowingPeriod,
+    Product,
 )
 from tapir.wirgarten.parameter_keys import ParameterKeys
 from tapir.wirgarten.utils import (
@@ -853,6 +859,61 @@ class AdminImportMemberSubscriptionApiView(APIView):
                     "updated_existing_product_ids": updated,
                     "skipped_existing_product_ids": skipped,
                     "pickup_location_created": pickup_created,
+                }
+            ).data
+        )
+
+
+class AdminCancelMemberSubscriptionApiView(APIView):
+    """Admin-only: cancel one subscription for a member/product/period."""
+
+    permission_classes = [permissions.IsAuthenticated, HasCoopManagePermission]
+
+    @extend_schema(
+        request=CancelMemberSubscriptionRequestSerializer,
+        responses={200: CancelMemberSubscriptionResponseSerializer},
+    )
+    def post(self, request):
+        serializer = CancelMemberSubscriptionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        member = get_object_or_404(Member, id=data["member_id"])
+        growing_period = get_object_or_404(
+            GrowingPeriod, id=data["growing_period_id"]
+        )
+        product = get_object_or_404(Product, id=data["product_id"])
+
+        try:
+            subscription, cancelled, deleted, previous_end_date = (
+                CancelMemberSubscriptionService.cancel(
+                    member=member,
+                    growing_period=growing_period,
+                    product=product,
+                    end_date=data["end_date"],
+                    cancellation_ts=data["cancellation_ts"],
+                    actor=request.user,
+                )
+            )
+        except DjangoValidationError as error:
+            return Response(
+                {"error": " ".join(error.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            CancelMemberSubscriptionResponseSerializer(
+                {
+                    "cancelled": cancelled,
+                    "already_cancelled": not cancelled and not deleted,
+                    "deleted": deleted,
+                    "subscription_id": (
+                        str(subscription.id) if subscription else None
+                    ),
+                    "previous_end_date": previous_end_date,
+                    "new_end_date": (
+                        subscription.end_date if subscription else None
+                    ),
                 }
             ).data
         )

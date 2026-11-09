@@ -49,6 +49,8 @@ export * from "./BundledEmailConfiguration";
 export * from "./BundledEmailConfigurationRequest";
 export * from "./CabLoggedInUserChangeTargetsPaymentRhythmResponse";
 export * from "./CancellationData";
+export * from "./CancelMemberSubscriptionRequestRequest";
+export * from "./CancelMemberSubscriptionResponse";
 export * from "./CancelSubscriptionsRequestRequest";
 export * from "./CancelSubscriptionsViewResponse";
 export * from "./ChangeTypeEnum";
