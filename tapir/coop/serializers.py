@@ -183,3 +183,20 @@ class ImportMemberSubscriptionResponseSerializer(serializers.Serializer):
         child=serializers.CharField()
     )
     pickup_location_created = serializers.BooleanField()
+
+
+class CancelMemberSubscriptionRequestSerializer(serializers.Serializer):
+    member_id = serializers.CharField()
+    growing_period_id = serializers.CharField()
+    product_id = serializers.CharField()
+    end_date = serializers.DateField()
+    cancellation_ts = serializers.DateTimeField()
+
+
+class CancelMemberSubscriptionResponseSerializer(serializers.Serializer):
+    cancelled = serializers.BooleanField()
+    already_cancelled = serializers.BooleanField()
+    deleted = serializers.BooleanField()
+    subscription_id = serializers.CharField(allow_null=True)
+    previous_end_date = serializers.DateField(allow_null=True)
+    new_end_date = serializers.DateField(allow_null=True)

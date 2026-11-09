@@ -15,6 +15,8 @@
 import type {
   AdminImportMemberRequestRequest,
   AdminImportMemberResponse,
+  CancelMemberSubscriptionRequestRequest,
+  CancelMemberSubscriptionResponse,
   ExistingMemberPurchasesSharesRequestRequest,
   GetCoopShareTransactionsResponse,
   ImportMemberSubscriptionRequestRequest,
@@ -32,6 +34,8 @@ import type {
 import {
   AdminImportMemberRequestRequestToJSON,
   AdminImportMemberResponseFromJSON,
+  CancelMemberSubscriptionRequestRequestToJSON,
+  CancelMemberSubscriptionResponseFromJSON,
   ExistingMemberPurchasesSharesRequestRequestToJSON,
   GetCoopShareTransactionsResponseFromJSON,
   ImportMemberSubscriptionRequestRequestToJSON,
@@ -47,6 +51,10 @@ import {
   PatchedUpdateMemberBankDataRequestRequestToJSON,
 } from "../models/index";
 import * as runtime from "../runtime";
+
+export interface CoopAdminCancelMemberSubscriptionCreateRequest {
+  cancelMemberSubscriptionRequestRequest: CancelMemberSubscriptionRequestRequest;
+}
 
 export interface CoopAdminImportMemberCreateRequest {
   adminImportMemberRequestRequest: AdminImportMemberRequestRequest;
@@ -105,6 +113,72 @@ export interface CoopMembersRetrieveRequest {
  *
  */
 export class CoopApi extends runtime.BaseAPI {
+  /**
+   * Admin-only: cancel one subscription for a member/product/period.
+   */
+  async coopAdminCancelMemberSubscriptionCreateRaw(
+    requestParameters: CoopAdminCancelMemberSubscriptionCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CancelMemberSubscriptionResponse>> {
+    if (requestParameters["cancelMemberSubscriptionRequestRequest"] == null) {
+      throw new runtime.RequiredError(
+        "cancelMemberSubscriptionRequestRequest",
+        'Required parameter "cancelMemberSubscriptionRequestRequest" was null or undefined when calling coopAdminCancelMemberSubscriptionCreate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.apiKey) {
+      headerParameters["Authorization"] =
+        await this.configuration.apiKey("Authorization"); // tokenAuth authentication
+    }
+
+    if (
+      this.configuration &&
+      (this.configuration.username !== undefined ||
+        this.configuration.password !== undefined)
+    ) {
+      headerParameters["Authorization"] =
+        "Basic " +
+        btoa(this.configuration.username + ":" + this.configuration.password);
+    }
+    const response = await this.request(
+      {
+        path: `/coop/admin/cancel_member_subscription/`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: CancelMemberSubscriptionRequestRequestToJSON(
+          requestParameters["cancelMemberSubscriptionRequestRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CancelMemberSubscriptionResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Admin-only: cancel one subscription for a member/product/period.
+   */
+  async coopAdminCancelMemberSubscriptionCreate(
+    requestParameters: CoopAdminCancelMemberSubscriptionCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CancelMemberSubscriptionResponse> {
+    const response = await this.coopAdminCancelMemberSubscriptionCreateRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Admin-only direct DB import endpoint.  Bypasses the BestellWizard validator pipeline (``validate_phone_number_is_valid`` / ``validate_email_address_not_in_use``) and Keycloak sync, so admins can import legacy data that would otherwise be rejected. No welcome / SEPA / onboarding emails are sent — those have to be triggered out-of-band.
    */
