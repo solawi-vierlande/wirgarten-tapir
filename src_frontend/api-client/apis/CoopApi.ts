@@ -12,9 +12,12 @@
  * Do not edit the class manually.
  */
 
+import * as runtime from "../runtime";
 import type {
   AdminImportMemberRequestRequest,
   AdminImportMemberResponse,
+  CancelMemberAssociationMembershipRequestRequest,
+  CancelMemberAssociationMembershipResponse,
   CancelMemberSubscriptionRequestRequest,
   CancelMemberSubscriptionResponse,
   ExistingMemberPurchasesSharesRequestRequest,
@@ -32,25 +35,49 @@ import type {
   PatchedUpdateMemberBankDataRequestRequest,
 } from "../models/index";
 import {
+  AdminImportMemberRequestRequestFromJSON,
   AdminImportMemberRequestRequestToJSON,
   AdminImportMemberResponseFromJSON,
+  AdminImportMemberResponseToJSON,
+  CancelMemberAssociationMembershipRequestRequestFromJSON,
+  CancelMemberAssociationMembershipRequestRequestToJSON,
+  CancelMemberAssociationMembershipResponseFromJSON,
+  CancelMemberAssociationMembershipResponseToJSON,
+  CancelMemberSubscriptionRequestRequestFromJSON,
   CancelMemberSubscriptionRequestRequestToJSON,
   CancelMemberSubscriptionResponseFromJSON,
+  CancelMemberSubscriptionResponseToJSON,
+  ExistingMemberPurchasesSharesRequestRequestFromJSON,
   ExistingMemberPurchasesSharesRequestRequestToJSON,
   GetCoopShareTransactionsResponseFromJSON,
+  GetCoopShareTransactionsResponseToJSON,
+  ImportMemberSubscriptionRequestRequestFromJSON,
   ImportMemberSubscriptionRequestRequestToJSON,
   ImportMemberSubscriptionResponseFromJSON,
+  ImportMemberSubscriptionResponseToJSON,
+  MemberFromJSON,
+  MemberToJSON,
   MemberBankDataResponseFromJSON,
+  MemberBankDataResponseToJSON,
+  MemberEmailRequestRequestFromJSON,
   MemberEmailRequestRequestToJSON,
   MemberEmailResponseFromJSON,
-  MemberFromJSON,
+  MemberEmailResponseToJSON,
   MemberProfilePersonalDataResponseFromJSON,
+  MemberProfilePersonalDataResponseToJSON,
   MinimumNumberOfSharesResponseFromJSON,
+  MinimumNumberOfSharesResponseToJSON,
   OrderConfirmationResponseFromJSON,
+  OrderConfirmationResponseToJSON,
+  PatchedMemberProfilePersonalDataRequestRequestFromJSON,
   PatchedMemberProfilePersonalDataRequestRequestToJSON,
+  PatchedUpdateMemberBankDataRequestRequestFromJSON,
   PatchedUpdateMemberBankDataRequestRequestToJSON,
 } from "../models/index";
-import * as runtime from "../runtime";
+
+export interface CoopAdminCancelMemberAssociationMembershipCreateRequest {
+  cancelMemberAssociationMembershipRequestRequest: CancelMemberAssociationMembershipRequestRequest;
+}
 
 export interface CoopAdminCancelMemberSubscriptionCreateRequest {
   cancelMemberSubscriptionRequestRequest: CancelMemberSubscriptionRequestRequest;
@@ -113,6 +140,76 @@ export interface CoopMembersRetrieveRequest {
  *
  */
 export class CoopApi extends runtime.BaseAPI {
+  /**
+   * Admin-only: cancel the association membership active at end_date.
+   */
+  async coopAdminCancelMemberAssociationMembershipCreateRaw(
+    requestParameters: CoopAdminCancelMemberAssociationMembershipCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CancelMemberAssociationMembershipResponse>> {
+    if (
+      requestParameters["cancelMemberAssociationMembershipRequestRequest"] ==
+      null
+    ) {
+      throw new runtime.RequiredError(
+        "cancelMemberAssociationMembershipRequestRequest",
+        'Required parameter "cancelMemberAssociationMembershipRequestRequest" was null or undefined when calling coopAdminCancelMemberAssociationMembershipCreate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.apiKey) {
+      headerParameters["Authorization"] =
+        await this.configuration.apiKey("Authorization"); // tokenAuth authentication
+    }
+
+    if (
+      this.configuration &&
+      (this.configuration.username !== undefined ||
+        this.configuration.password !== undefined)
+    ) {
+      headerParameters["Authorization"] =
+        "Basic " +
+        btoa(this.configuration.username + ":" + this.configuration.password);
+    }
+    const response = await this.request(
+      {
+        path: `/coop/admin/cancel_member_association_membership/`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: CancelMemberAssociationMembershipRequestRequestToJSON(
+          requestParameters["cancelMemberAssociationMembershipRequestRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CancelMemberAssociationMembershipResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Admin-only: cancel the association membership active at end_date.
+   */
+  async coopAdminCancelMemberAssociationMembershipCreate(
+    requestParameters: CoopAdminCancelMemberAssociationMembershipCreateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CancelMemberAssociationMembershipResponse> {
+    const response =
+      await this.coopAdminCancelMemberAssociationMembershipCreateRaw(
+        requestParameters,
+        initOverrides,
+      );
+    return await response.value();
+  }
+
   /**
    * Admin-only: cancel one subscription for a member/product/period.
    */
