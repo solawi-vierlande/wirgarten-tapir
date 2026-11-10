@@ -55,6 +55,11 @@ urlpatterns = [
         views.AdminCancelMemberSubscriptionApiView.as_view(),
         name="admin-cancel-member-subscription",
     ),
+    path(
+        "admin/cancel_member_association_membership/",
+        views.AdminCancelMemberAssociationMembershipApiView.as_view(),
+        name="admin-cancel-member-association-membership",
+    ),
 ]
 
 router = DefaultRouter()

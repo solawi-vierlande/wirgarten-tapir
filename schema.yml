@@ -2627,6 +2627,35 @@ paths:
                   items:
                     type: string
           description: ''
+  /coop/admin/cancel_member_association_membership/:
+    post:
+      operationId: coop_admin_cancel_member_association_membership_create
+      description: 'Admin-only: cancel the association membership active at end_date.'
+      tags:
+      - coop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelMemberAssociationMembershipRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelMemberAssociationMembershipRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelMemberAssociationMembershipRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - cookieAuth: []
+      - DrfForwardAuthentication: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelMemberAssociationMembershipResponse'
+          description: ''
   /coop/admin/cancel_member_subscription/:
     post:
       operationId: coop_admin_cancel_member_subscription_create
@@ -10553,6 +10582,47 @@ components:
       required:
       - can_change
       - current_rhythm
+    CancelMemberAssociationMembershipRequestRequest:
+      type: object
+      properties:
+        member_id:
+          type: string
+          minLength: 1
+        end_date:
+          type: string
+          format: date
+        cancellation_ts:
+          type: string
+          format: date-time
+      required:
+      - cancellation_ts
+      - end_date
+      - member_id
+    CancelMemberAssociationMembershipResponse:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+        already_cancelled:
+          type: boolean
+        cancelled_membership_ids:
+          type: array
+          items:
+            type: string
+        deleted_membership_ids:
+          type: array
+          items:
+            type: string
+        end_date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - already_cancelled
+      - cancelled
+      - cancelled_membership_ids
+      - deleted_membership_ids
+      - end_date
     CancelMemberSubscriptionRequestRequest:
       type: object
       properties:

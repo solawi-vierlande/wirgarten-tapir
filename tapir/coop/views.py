@@ -38,6 +38,8 @@ from tapir.coop.serializers import (
     ImportMemberSubscriptionResponseSerializer,
     CancelMemberSubscriptionRequestSerializer,
     CancelMemberSubscriptionResponseSerializer,
+    CancelMemberAssociationMembershipRequestSerializer,
+    CancelMemberAssociationMembershipResponseSerializer,
     MinimumNumberOfSharesResponseSerializer,
     GetCoopShareTransactionsResponseSerializer,
     ExistingMemberPurchasesSharesRequestSerializer,
@@ -56,6 +58,9 @@ from tapir.coop.services.ensure_member_subscriptions_service import (
 )
 from tapir.coop.services.cancel_member_subscription_service import (
     CancelMemberSubscriptionService,
+)
+from tapir.coop.services.cancel_member_association_membership_service import (
+    CancelMemberAssociationMembershipService,
 )
 from tapir.coop.services.coop_membership_cancellation_manager import (
     CoopMembershipCancellationManager,
@@ -914,6 +919,55 @@ class AdminCancelMemberSubscriptionApiView(APIView):
                     "new_end_date": (
                         subscription.end_date if subscription else None
                     ),
+                }
+            ).data
+        )
+
+
+class AdminCancelMemberAssociationMembershipApiView(APIView):
+    """Admin-only: cancel the association membership active at end_date."""
+
+    permission_classes = [permissions.IsAuthenticated, HasCoopManagePermission]
+
+    @extend_schema(
+        request=CancelMemberAssociationMembershipRequestSerializer,
+        responses={200: CancelMemberAssociationMembershipResponseSerializer},
+    )
+    def post(self, request):
+        serializer = CancelMemberAssociationMembershipRequestSerializer(
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        member = get_object_or_404(Member, id=data["member_id"])
+
+        try:
+            (
+                cancelled,
+                already_cancelled,
+                cancelled_ids,
+                deleted_ids,
+            ) = CancelMemberAssociationMembershipService.cancel(
+                member=member,
+                end_date=data["end_date"],
+                cancellation_ts=data["cancellation_ts"],
+                actor=request.user,
+            )
+        except DjangoValidationError as error:
+            return Response(
+                {"error": " ".join(error.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            CancelMemberAssociationMembershipResponseSerializer(
+                {
+                    "cancelled": cancelled,
+                    "already_cancelled": already_cancelled or not cancelled,
+                    "cancelled_membership_ids": cancelled_ids,
+                    "deleted_membership_ids": deleted_ids,
+                    "end_date": data["end_date"],
                 }
             ).data
         )

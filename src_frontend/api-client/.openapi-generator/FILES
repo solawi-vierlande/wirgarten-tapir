@@ -63,6 +63,8 @@ models/BuildCsvExportResponse.ts
 models/BundledEmailConfiguration.ts
 models/BundledEmailConfigurationRequest.ts
 models/CabLoggedInUserChangeTargetsPaymentRhythmResponse.ts
+models/CancelMemberAssociationMembershipRequestRequest.ts
+models/CancelMemberAssociationMembershipResponse.ts
 models/CancelMemberSubscriptionRequestRequest.ts
 models/CancelMemberSubscriptionResponse.ts
 models/CancelSubscriptionsRequestRequest.ts

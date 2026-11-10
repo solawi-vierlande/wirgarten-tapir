@@ -200,3 +200,21 @@ class CancelMemberSubscriptionResponseSerializer(serializers.Serializer):
     subscription_id = serializers.CharField(allow_null=True)
     previous_end_date = serializers.DateField(allow_null=True)
     new_end_date = serializers.DateField(allow_null=True)
+
+
+class CancelMemberAssociationMembershipRequestSerializer(serializers.Serializer):
+    member_id = serializers.CharField()
+    end_date = serializers.DateField()
+    cancellation_ts = serializers.DateTimeField()
+
+
+class CancelMemberAssociationMembershipResponseSerializer(serializers.Serializer):
+    cancelled = serializers.BooleanField()
+    already_cancelled = serializers.BooleanField()
+    cancelled_membership_ids = serializers.ListField(
+        child=serializers.CharField()
+    )
+    deleted_membership_ids = serializers.ListField(
+        child=serializers.CharField()
+    )
+    end_date = serializers.DateField(allow_null=True)
